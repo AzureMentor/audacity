@@ -18,6 +18,8 @@
 #include <wx/msgdlg.h> // to inherit
 #include "wxPanelWrapper.h" // to inherit
 
+class AliasBlockFile;
+
 class AudacityProject;
 
 class ErrorDialog /* not final */ : public wxDialogWrapper
@@ -56,26 +58,6 @@ void ShowModelessErrorDialog(wxWindow *parent,
                      const wxString &helpPage,
                      bool Close = true);
 
-/// Displays a custom modeless error dialog for aliased file errors
-void ShowAliasMissingDialog(AudacityProject *parent,
-                     const wxString &dlogTitle,
-                     const wxString &message,
-                     const wxString &helpPage,
-                     const bool Close = true);
-
-extern wxString AudacityMessageBoxCaptionStr();
-
-// Do not use wxMessageBox!!  Its default window title does not translate!
-inline int AudacityMessageBox(const wxString& message,
-   const wxString& caption = AudacityMessageBoxCaptionStr(),
-   long style = wxOK | wxCENTRE,
-   wxWindow *parent = NULL,
-   int x = wxDefaultCoord, int y = wxDefaultCoord)
-{
-   return ::wxMessageBox(message, caption, style, parent, x, y);
-}
-
-
 #include <wx/textdlg.h> // to inherit
 
 /**************************************************************************//**
@@ -97,6 +79,10 @@ public:
    {}
    
    void SetInsertionPointEnd();
+   bool Show(bool show = true) override;
+
+private:
+   bool mSetInsertionPointEnd{};
 };
 
 /**************************************************************************//**

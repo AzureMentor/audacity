@@ -13,18 +13,23 @@
 
 #include "CellularPanel.h"
 #include "widgets/Ruler.h" // member variable
+#include "Prefs.h"
+#include "ViewInfo.h" // for PlayRegion
 
-#include "MemoryX.h"
-
-class ViewInfo;
 class AudacityProject;
 class SnapManager;
 class TrackList;
 
 // This is an Audacity Specific ruler panel.
-class AUDACITY_DLL_API AdornedRulerPanel final : public CellularPanel
+class AUDACITY_DLL_API AdornedRulerPanel final
+: public CellularPanel
+, private PrefsListener
 {
 public:
+   static AdornedRulerPanel &Get( AudacityProject &project );
+   static const AdornedRulerPanel &Get( const AudacityProject &project );
+   static void Destroy( AudacityProject &project );
+
    AdornedRulerPanel(AudacityProject *project,
                      wxWindow* parent,
                      wxWindowID id,
@@ -49,16 +54,13 @@ public:
 
    void SetPlayRegion(double playRegionStart, double playRegionEnd);
    void ClearPlayRegion();
-   void GetPlayRegion(double* playRegionStart, double* playRegionEnd);
 
    void GetMaxSize(wxCoord *width, wxCoord *height);
 
    void InvalidateRuler();
 
-   void UpdatePrefs();
+   void UpdatePrefs() override;
    void ReCreateButtons();
-
-   void RegenerateTooltips();
 
    void UpdateQuickPlayPos(wxCoord &mousePosX, bool shiftDown);
 
@@ -127,11 +129,7 @@ private:
 
    bool mIsSnapped;
 
-   bool   mPlayRegionLock;
-   double mPlayRegionStart;
-   double mPlayRegionEnd;
-   double mOldPlayRegionStart;
-   double mOldPlayRegionEnd;
+   PlayRegion mOldPlayRegion;
 
    bool mIsRecording;
 

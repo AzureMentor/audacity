@@ -22,21 +22,19 @@ MousePrefs, QualityPrefs, SpectrumPrefs and ThemePrefs.
   To actually add the new panel, edit the PrefsDialog constructor
   to append the panel to its list of panels.
 
-*******************************************************************//**
-
-\class PrefsPanelFactory
-\brief Base class for factories such as GUIPrefsFactory that produce a
-PrefsPanel.
-
 *//*******************************************************************/
 
 #ifndef __AUDACITY_PREFS_PANEL__
 #define __AUDACITY_PREFS_PANEL__
 
+#include <functional>
 #include "../widgets/wxPanelWrapper.h" // to inherit
+#include "../include/audacity/ComponentInterface.h"
 
 /* A few constants for an attempt at semi-uniformity */
 #define PREFS_FONT_SIZE     8
+
+#define BUILTIN_PREFS_PANEL_PREFIX wxT("Built-in PrefsPanel: ")
 
 /* these are spacing guidelines: ie. radio buttons should have a 5 pixel
  * border on each side */
@@ -46,9 +44,14 @@ PrefsPanel.
 
 class ShuttleGui;
 
-class PrefsPanel /* not final */ : public wxPanelWrapper
+class PrefsPanel /* not final */ : public wxPanelWrapper, ComponentInterface
 {
  public:
+   // \brief Type alias for factories such as GUIPrefsFactory that produce a
+   // PrefsPanel.
+   using Factory =
+      std::function< PrefsPanel * (wxWindow *parent, wxWindowID winid) >;
+
    PrefsPanel(wxWindow * parent, wxWindowID winid, const wxString &title)
    :  wxPanelWrapper(parent, winid)
    {
@@ -62,6 +65,15 @@ class PrefsPanel /* not final */ : public wxPanelWrapper
    virtual void Preview() {} // Make tentative changes
    virtual bool Commit() = 0; // used to be called "Apply"
 
+
+   virtual PluginPath GetPath();
+   virtual VendorSymbol GetVendor();
+   virtual wxString GetVersion();
+
+   //virtual ComponentInterfaceSymbol GetSymbol();
+   //virtual wxString GetDescription();
+
+
    // If it returns True, the Preview button is added below the panel
    // Default returns false
    virtual bool ShowsPreviewButton();
@@ -72,13 +84,6 @@ class PrefsPanel /* not final */ : public wxPanelWrapper
    virtual wxString HelpPageName();
 
    virtual void Cancel();
-};
-
-class PrefsPanelFactory /* not final */
-{
-public:
-   // Precondition: parent != NULL
-   virtual PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) = 0;
 };
 
 #endif

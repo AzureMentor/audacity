@@ -57,7 +57,6 @@ and sends it to that message target.
 
 #include "../MemoryX.h"
 #include <vector>
-//#include "../src/Project.h"
 #include "../commands/ResponseQueue.h"
 
 class wxStatusBar;
@@ -156,7 +155,7 @@ public:
 
 #if 0
 
-#include "../widgets/ProgressDialog.h" // Member variable
+//#include "../widgets/ProgressDialog.h" // Member variable
 
 /// Sends command progress information to a ProgressDialog
 class GUIProgressTarget final : public CommandProgressTarget

@@ -25,8 +25,6 @@ effects from this one class.
 #include "../../Audacity.h"
 #include "LadspaEffect.h"       // This class's header file
 
-#include "ladspa.h"
-
 #include <float.h>
 
 #include <wx/setup.h> // for wxUSE_* macros
@@ -49,8 +47,8 @@ effects from this one class.
 #include <wx/version.h>
 
 #include "../../FileNames.h"
-#include "../../Internat.h"
 #include "../../ShuttleGui.h"
+#include "../../widgets/NumericTextCtrl.h"
 #include "../../widgets/valnum.h"
 #include "../../widgets/wxPanelWrapper.h"
 
@@ -118,7 +116,7 @@ PluginPath LadspaEffectsModule::GetPath()
 
 ComponentInterfaceSymbol LadspaEffectsModule::GetSymbol()
 {
-   /* i8n-hint: abbreviates "Linux Audio Developer's Simple Plugin API"
+   /* i18n-hint: abbreviates "Linux Audio Developer's Simple Plugin API"
       (Application programming interface)
     */
    return XO("LADSPA Effects");
@@ -156,9 +154,9 @@ void LadspaEffectsModule::Terminate()
    return;
 }
 
-FileExtensions LadspaEffectsModule::GetFileExtensions()
+const FileExtensions &LadspaEffectsModule::GetFileExtensions()
 {
-   return {{
+   static FileExtensions result{{
 
 #ifdef __WXMSW__
 
@@ -176,6 +174,7 @@ FileExtensions LadspaEffectsModule::GetFileExtensions()
 #endif
 
    }};
+   return result;
 }
 
 FilePath LadspaEffectsModule::InstallPath()
@@ -890,6 +889,11 @@ size_t LadspaEffect::SetBlockSize(size_t maxBlockSize)
    return mBlockSize;
 }
 
+size_t LadspaEffect::GetBlockSize() const
+{
+   return mBlockSize;
+}
+
 sampleCount LadspaEffect::GetLatency()
 {
    if (mUseLatency && mLatencyPort >= 0 && !mLatencyDone)
@@ -1313,7 +1317,7 @@ bool LadspaEffect::PopulateUI(wxWindow *parent)
                gridSizer->Add(1, 1, 0);
             }
 
-            mSliders[p] = safenew wxSlider(w, ID_Sliders + p,
+            mSliders[p] = safenew wxSliderWrapper(w, ID_Sliders + p,
                0, 0, 1000,
                wxDefaultPosition,
                wxSize(200, -1));

@@ -41,6 +41,7 @@ or ASlider.
 #include <wx/dcbuffer.h>
 #include <wx/dcclient.h>
 #include <wx/dcmemory.h>
+#include <wx/frame.h>
 #include <wx/graphics.h>
 #include <wx/image.h>
 #include <wx/panel.h>
@@ -64,7 +65,6 @@ or ASlider.
 #include "../Project.h"
 #include "../ShuttleGui.h"
 
-#include "../Theme.h"
 #include "../AllThemeResources.h"
 
 #if wxUSE_ACCESSIBILITY
@@ -217,7 +217,11 @@ wxSize TipPanel::GetSize() const
 
 void TipPanel::SetPos(const wxPoint & pos)
 {
+#if defined(__WXGTK__)
+   SetSize(pos.x, pos.y, wxDefaultCoord, wxDefaultCoord);
+#else
    SetSize(pos.x, pos.y, mWidth, mHeight);
+#endif
 }
 
 void TipPanel::SetLabel(const wxString & label)
@@ -1088,7 +1092,7 @@ void LWSlider::OnMouseEvent(wxMouseEvent & event)
    {
       // Display the tooltip in the status bar
       wxString tip = GetTip(mCurrentValue);
-      GetActiveProject()->TP_DisplayStatusMessage(tip);
+      GetActiveProject()->SetStatus(tip);
       Refresh();
    }
    else if (event.Leaving())
@@ -1097,7 +1101,7 @@ void LWSlider::OnMouseEvent(wxMouseEvent & event)
       {
          ShowTip(false);
       }
-      GetActiveProject()->TP_DisplayStatusMessage(wxT(""));
+      GetActiveProject()->SetStatus(wxT(""));
       Refresh();
    }
 

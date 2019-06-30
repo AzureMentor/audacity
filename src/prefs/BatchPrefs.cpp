@@ -23,10 +23,7 @@ setting used in debugging batch (aka macros) processing.
 
 #include "../Languages.h"
 #include "../Prefs.h"
-#include "../Project.h"
-#include "../BatchCommandDialog.h"
 #include "../ShuttleGui.h"
-#include "../toolbars/ToolManager.h"
 
 BEGIN_EVENT_TABLE(BatchPrefs, PrefsPanel)
 END_EVENT_TABLE()
@@ -36,6 +33,21 @@ BatchPrefs::BatchPrefs(wxWindow * parent, wxWindowID winid):
    PrefsPanel(parent, winid, _("Batch"))
 {
    Populate();
+}
+
+ComponentInterfaceSymbol BatchPrefs::GetSymbol()
+{
+   return BATCH_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString BatchPrefs::GetDescription()
+{
+   return _("Preferences for Batch");
+}
+
+wxString BatchPrefs::HelpPageName()
+{
+   return  "Batch_Preferences";
 }
 
 /// Creates the dialog and its contents.
@@ -83,8 +95,9 @@ BatchPrefs::~BatchPrefs()
 {
 }
 
-PrefsPanel *BatchPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+BatchPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew BatchPrefs(parent, winid);
-}
+};

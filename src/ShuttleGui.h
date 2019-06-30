@@ -17,14 +17,12 @@
 #include "Audacity.h"
 
 #include <vector>
+#include <wx/slider.h> // to inherit
 #include "MemoryX.h"
 
 #include "WrappedType.h"
 
-// For ShuttleGuiGetDefinitions.
-#include "commands/CommandTargets.h"
-
-class EnumSetting;
+class ChoiceSetting;
 
 class wxArrayStringEx;
 
@@ -75,6 +73,35 @@ class wxGrid;
 class Shuttle;
 
 class WrappedType;
+
+#ifdef __WXMAC__
+
+#include <wx/statbox.h> // to inherit
+
+class wxStaticBoxWrapper
+   : public wxStaticBox // inherit to get access to m_container
+{
+public:
+   template< typename... Args >
+   wxStaticBoxWrapper( Args &&...args )
+      : wxStaticBox( std::forward<Args>(args)... )
+   {
+      m_container.EnableSelfFocus();
+   }
+};
+
+/// Fix a defect in TAB key navigation to sliders, known to happen in wxWidgets
+/// 3.1.1 and maybe in earlier versions
+class wxSliderWrapper : public wxSlider
+{
+public:
+   using wxSlider::wxSlider;
+   void SetFocus() override;
+};
+#else
+using wxStaticBoxWrapper = wxStaticBox;
+using wxSliderWrapper = wxSlider;
+#endif
 
 class AUDACITY_DLL_API ShuttleGuiBase /* not final */
 {
@@ -213,7 +240,7 @@ public:
    // This one is defined in terms of the next and not virtual
    virtual wxChoice *TieChoice(
       const wxString &Prompt,
-      EnumSetting &enumSetting );
+      ChoiceSetting &choiceSetting );
 
    virtual wxChoice * TieChoice(
       const wxString &Prompt,
@@ -411,70 +438,6 @@ public:
    wxSizerItem * AddSpace( int size ) { return AddSpace( size, size ); };
 
    teShuttleMode GetMode() { return  mShuttleMode; };
-};
-
-
-/**************************************************************************//**
-\brief Shuttle that retrieves a JSON format definition of a command's parameters.
-********************************************************************************/
-class ShuttleGuiGetDefinition : public ShuttleGui, public CommandMessageTargetDecorator
-{
-public:
-   ShuttleGuiGetDefinition(wxWindow * pParent,CommandMessageTarget & target );
-   virtual ~ShuttleGuiGetDefinition();
-
-   wxCheckBox * TieCheckBox(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const bool bDefault) override;
-   wxCheckBox * TieCheckBoxOnRight(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const bool bDefault) override;
-   wxChoice * TieChoice(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const wxString &Default,
-      const wxArrayStringEx &Choices,
-      const wxArrayStringEx & InternalChoices ) override;
-
-   // An assertion will be violated if this override is reached!
-   wxChoice * TieChoice(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const int Default,
-      const wxArrayStringEx & Choices,
-      const std::vector<int> & InternalChoices) override;
-
-   wxChoice * TieNumberAsChoice(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const int Default,
-      const wxArrayStringEx & Choices,
-      const std::vector<int> & InternalChoices) override;
-
-   wxTextCtrl * TieTextBox(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const wxString &Default,
-      const int nChars) override;
-   wxTextCtrl * TieNumericTextBox(
-      const wxString & Prompt,
-      const wxString & SettingName,
-      const double & Default,
-      const int nChars) override;
-   wxSlider * TieSlider(
-      const wxString & Prompt,
-      const wxString & SettingName,
-      const int iDefault,
-      const int max,
-      const int min = 0) override;
-   wxSpinCtrl * TieSpinCtrl(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const int Value,
-      const int max,
-      const int min) override;
 };
 
 #endif

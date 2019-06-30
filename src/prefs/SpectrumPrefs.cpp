@@ -23,17 +23,18 @@
 #include <wx/defs.h>
 #include <wx/intl.h>
 #include <wx/checkbox.h>
+#include <wx/textctrl.h>
 
 #include "../FFT.h"
 #include "../Project.h"
 #include "../ShuttleGui.h"
-#include "../WaveTrack.h"
 
 #include "../TrackPanel.h"
+#include "../WaveTrack.h"
 
 #include <algorithm>
 
-#include "../widgets/ErrorDialog.h"
+#include "../widgets/AudacityMessageBox.h"
 
 SpectrumPrefs::SpectrumPrefs(wxWindow * parent, wxWindowID winid, WaveTrack *wt)
 :  PrefsPanel(parent, winid, wt ? _("Spectrogram Settings") : _("Spectrograms"))
@@ -63,6 +64,28 @@ SpectrumPrefs::~SpectrumPrefs()
 {
    if (!mCommitted)
       Rollback();
+}
+
+ComponentInterfaceSymbol SpectrumPrefs::GetSymbol()
+{
+   return SPECTRUM_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString SpectrumPrefs::GetDescription()
+{
+   return _("Preferences for Spectrum");
+}
+
+wxString SpectrumPrefs::HelpPageName()
+{
+   // Currently (May2017) Spectrum Settings is the only preferences
+   // we ever display in a dialog on its own without others.
+   // We do so when it is configuring spectrums for a track.
+   // Because this happens, we want to visit a different help page.
+   // So we change the page name in the case of a page on its own.
+   return mWt
+      ? "Spectrogram_Settings"
+      : "Spectrograms_Preferences";
 }
 
 enum {
@@ -404,9 +427,9 @@ void SpectrumPrefs::Rollback()
    }
 
    if (isOpenPage) {
-      TrackPanel *const tp = ::GetActiveProject()->GetTrackPanel();
-      tp->UpdateVRulers();
-      tp->Refresh(false);
+      auto &tp = TrackPanel::Get ( *::GetActiveProject() );
+      tp.UpdateVRulers();
+      tp.Refresh(false);
    }
 }
 
@@ -447,13 +470,13 @@ void SpectrumPrefs::Preview()
 
    if (mWt && isOpenPage) {
       for (auto channel : TrackList::Channels(mWt))
-         channel->SetDisplay(WaveTrack::Spectrum);
+         channel->SetDisplay(WaveTrackViewConstants::Spectrum);
    }
 
    if (isOpenPage) {
-      TrackPanel *const tp = ::GetActiveProject()->GetTrackPanel();
-      tp->UpdateVRulers();
-      tp->Refresh(false);
+      auto &tp = TrackPanel::Get( *::GetActiveProject() );
+      tp.UpdateVRulers();
+      tp.Refresh(false);
    }
 }
 
@@ -534,18 +557,6 @@ void SpectrumPrefs::EnableDisableSTFTOnlyControls()
 #endif
 }
 
-wxString SpectrumPrefs::HelpPageName()
-{
-   // Currently (May2017) Spectrum Settings is the only preferences
-   // we ever display in a dialog on its own without others.
-   // We do so when it is configuring spectrums for a track.
-   // Because this happens, we want to visit a different help page.
-   // So we change the page name in the case of a page on its own.
-   return mWt
-      ? "Spectrogram_Settings"
-      : "Spectrograms_Preferences";
-}
-
 BEGIN_EVENT_TABLE(SpectrumPrefs, PrefsPanel)
    EVT_CHOICE(ID_WINDOW_SIZE, SpectrumPrefs::OnWindowSize)
    EVT_CHECKBOX(ID_DEFAULTS, SpectrumPrefs::OnDefaults)
@@ -565,13 +576,12 @@ BEGIN_EVENT_TABLE(SpectrumPrefs, PrefsPanel)
 
 END_EVENT_TABLE()
 
-SpectrumPrefsFactory::SpectrumPrefsFactory(WaveTrack *wt)
-: mWt(wt)
+PrefsPanel::Factory
+SpectrumPrefsFactory( WaveTrack *wt )
 {
-}
-
-PrefsPanel *SpectrumPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
-{
-   wxASSERT(parent); // to justify safenew
-   return safenew SpectrumPrefs(parent, winid, mWt);
+   return [=](wxWindow *parent, wxWindowID winid)
+   {
+      wxASSERT(parent); // to justify safenew
+      return safenew SpectrumPrefs(parent, winid, wt);
+   };
 }

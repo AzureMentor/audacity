@@ -52,6 +52,21 @@ WaveformPrefs::~WaveformPrefs()
 {
 }
 
+ComponentInterfaceSymbol WaveformPrefs::GetSymbol()
+{
+   return WAVEFORM_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString WaveformPrefs::GetDescription()
+{
+   return _("Preferences for Waveforms");
+}
+
+wxString WaveformPrefs::HelpPageName()
+{
+   return "Waveform_Preferences";
+}
+
 enum {
    ID_DEFAULTS = 10001,
 
@@ -169,13 +184,13 @@ bool WaveformPrefs::Commit()
 
    if (mWt && isOpenPage) {
       for (auto channel : TrackList::Channels(mWt))
-         channel->SetDisplay(WaveTrack::Waveform);
+         channel->SetDisplay(WaveTrackViewConstants::Waveform);
    }
 
    if (isOpenPage) {
-      TrackPanel *const tp = ::GetActiveProject()->GetTrackPanel();
-      tp->UpdateVRulers();
-      tp->Refresh(false);
+      auto &tp = TrackPanel::Get( *::GetActiveProject() );
+      tp.UpdateVRulers();
+      tp.Refresh(false);
    }
 
    return true;
@@ -232,13 +247,12 @@ EVT_CHOICE(ID_RANGE, WaveformPrefs::OnControl)
 EVT_CHECKBOX(ID_DEFAULTS, WaveformPrefs::OnDefaults)
 END_EVENT_TABLE()
 
-WaveformPrefsFactory::WaveformPrefsFactory(WaveTrack *wt)
-: mWt(wt)
+PrefsPanel::Factory
+WaveformPrefsFactory(WaveTrack *wt)
 {
-}
-
-PrefsPanel *WaveformPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
-{
-   wxASSERT(parent); // to justify safenew
-   return safenew WaveformPrefs(parent, winid, mWt);
+   return [=](wxWindow *parent, wxWindowID winid)
+   {
+      wxASSERT(parent); // to justify safenew
+      return safenew WaveformPrefs(parent, winid, wt);
+   };
 }

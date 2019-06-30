@@ -27,10 +27,15 @@ class KeyView;
 struct NormalizedKeyString;
 enum ViewByType : int;
 
+#define KEY_CONFIG_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Key Config") }
+
 class KeyConfigPrefs final : public PrefsPanel
 {
 public:
    KeyConfigPrefs(wxWindow * parent, wxWindowID winid, const CommandID &name);
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    bool Commit() override;
    void Cancel() override;
    wxString HelpPageName() override;
@@ -88,15 +93,9 @@ private:
 };
 
 
-/// A PrefsPanelFactory that creates one KeyConfigPrefs panel.
-class KeyConfigPrefsFactory final : public PrefsPanelFactory
-{
-public:
-   KeyConfigPrefsFactory(const CommandID &name = {})
-      : mName{ name } {}
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-
-private:
-   CommandID mName;
-};
+/// A PrefsPanel::Factory that creates one KeyConfigPrefs panel.
+/// This factory can be parametrized by name, which specifies a command to be
+/// focused initially
+extern PrefsPanel::Factory KeyConfigPrefsFactory(
+   const CommandID &name = {} );
 #endif

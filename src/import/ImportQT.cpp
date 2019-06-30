@@ -14,10 +14,10 @@
 **********************************************************************/
 
 #include "../Audacity.h" // for USE_* macros
-#include "ImportQT.h"
 
+#include "Import.h"
 #include "ImportPlugin.h"
-#include "../widgets/ErrorDialog.h"
+#include "../widgets/AudacityMessageBox.h"
 #include "../widgets/ProgressDialog.h"
 
 #define DESC _("QuickTime files")
@@ -38,14 +38,17 @@ static const auto exts = {
 
 #ifndef USE_QUICKTIME
 
-void GetQTImportPlugin(ImportPluginList &importPluginList,
-                       UnusableImportPluginList &unusableImportPluginList)
-{
-   unusableImportPluginList.push_back(
+// Bug 2068: misleading error message about QuickTime
+// In 64 bit versions we cannot compile in (obsolete) QuickTime
+// So don't register the QuickTime extensions, so ensuring we never report
+// "This version of Audacity was not compiled with QuickTime files support"  
+// When attempting to import MP4 files.
+/*
+static Importer::RegisteredUnusableImportPlugin registered{
       std::make_unique<UnusableImportPlugin>(DESC,
          FileExtensions( exts.begin(), exts.end() ) )
-   );
-}
+};
+*/
 
 #else /* USE_QUICKTIME */
 
@@ -73,7 +76,6 @@ void GetQTImportPlugin(ImportPluginList &importPluginList,
 // There's a name collision between our Track and QuickTime's...workaround it
 #undef Track
 
-#include "../Internat.h"
 #include "../Tags.h"
 #include "../WaveTrack.h"
 
@@ -121,6 +123,8 @@ class QTImportPlugin final : public ImportPlugin
 
    wxString GetPluginFormatDescription();
    std::unique_ptr<ImportFileHandle> Open(const wxString & Filename) override;
+
+   unsigned SequenceNumber() const override;
 
  private:
    bool mInitialized;
@@ -171,12 +175,6 @@ class QTImportFileHandle final : public ImportFileHandle
    Movie mMovie;
 };
 
-void GetQTImportPlugin(ImportPluginList &importPluginList,
-                       UnusableImportPluginList &unusableImportPluginList)
-{
-   importPluginList.push_back( std::make_unique<QTImportPlugin>() );
-}
-
 wxString QTImportPlugin::GetPluginFormatDescription()
 {
    return DESC;
@@ -221,6 +219,15 @@ std::unique_ptr<ImportFileHandle> QTImportPlugin::Open(const wxString & Filename
 
    return std::make_unique<QTImportFileHandle>(Filename, theMovie);
 }
+
+unsigned QTImportPlugin::SequenceNumber() const
+{
+   return 70;
+}
+
+static Importer::RegisteredImportPlugin registered{
+   std::make_unique< QTImportPlugin >()
+};
 
 
 wxString QTImportFileHandle::GetFileDescription()

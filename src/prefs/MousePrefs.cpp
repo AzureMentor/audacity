@@ -43,7 +43,6 @@
 
 #include "../Prefs.h"
 #include "../ShuttleGui.h"
-#include "../Internat.h"
 
 // The numbers of the columns of the mList.
 enum
@@ -69,6 +68,21 @@ MousePrefs::MousePrefs(wxWindow * parent, wxWindowID winid)
 
 MousePrefs::~MousePrefs()
 {
+}
+
+ComponentInterfaceSymbol MousePrefs::GetSymbol()
+{
+   return MOUSE_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString MousePrefs::GetDescription()
+{
+   return _("Preferences for Mouse");
+}
+
+wxString MousePrefs::HelpPageName()
+{
+   return "Mouse_Preferences";
 }
 
 /// Creates the dialog and its contents.
@@ -203,13 +217,9 @@ bool MousePrefs::Commit()
    return true;
 }
 
-wxString MousePrefs::HelpPageName()
-{
-   return "Mouse_Preferences";
-}
-
-PrefsPanel *MousePrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+MousePrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew MousePrefs(parent, winid);
-}
+};

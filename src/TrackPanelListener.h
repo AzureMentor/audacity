@@ -11,8 +11,8 @@
 #ifndef __AUDACITY_TRACK_PANEL_LISTENER__
 #define __AUDACITY_TRACK_PANEL_LISTENER__
 
-class ToolsToolBar;
-class ControlToolBar;
+#include "Audacity.h"
+
 enum class UndoPush : unsigned char;
 
 /*
@@ -27,7 +27,6 @@ class AUDACITY_DLL_API TrackPanelListener /* not final */ {
    virtual ~TrackPanelListener(){};
 
    virtual void TP_DisplaySelection() = 0;
-   virtual void TP_DisplayStatusMessage(const wxString &msg) = 0;
 
    virtual void TP_RedrawScrollbars() = 0;
    virtual void TP_ScrollLeft() = 0;

@@ -34,12 +34,11 @@
 #include <wx/intl.h>
 #include <wx/scrolwin.h>
 
-#include "LoadLV2.h"
-#include "../../Internat.h"
 #include "../../ShuttleGui.h"
 #include "../../widgets/valnum.h"
+#include "../../widgets/AudacityMessageBox.h"
 #include "../../widgets/wxPanelWrapper.h"
-#include "../../widgets/ErrorDialog.h"
+#include "../../widgets/NumericTextCtrl.h"
 
 #include "lilv/lilv.h"
 #include "suil/suil.h"
@@ -726,6 +725,11 @@ size_t LV2Effect::SetBlockSize(size_t maxBlockSize)
       }
    }
 
+   return mBlockSize;
+}
+
+size_t LV2Effect::GetBlockSize() const
+{
    return mBlockSize;
 }
 
@@ -1714,7 +1718,7 @@ bool LV2Effect::BuildPlain()
                      gridSizer->Add(1, 1, 0);
                   }
 
-                  mSliders[p] = safenew wxSlider(w, ID_Sliders + p,
+                  mSliders[p] = safenew wxSliderWrapper(w, ID_Sliders + p,
                      0, 0, 1000,
                      wxDefaultPosition,
                      wxSize(150, -1));

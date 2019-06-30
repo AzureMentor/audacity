@@ -27,9 +27,6 @@
 
 #include "../Prefs.h"
 #include "../ShuttleGui.h"
-#include "../WaveTrack.h"
-
-#include "../Internat.h"
 
 int TracksPrefs::iPreferencePinned = -1;
 
@@ -63,16 +60,16 @@ static const EnumValueSymbol choicesView[] = {
    { XO("Spectrogram") }
 };
 static const int intChoicesView[] = {
-   (int)(WaveTrack::Waveform),
-   (int)(WaveTrack::obsoleteWaveformDBDisplay),
-   (int)(WaveTrack::Spectrum)
+   (int)(WaveTrackViewConstants::Waveform),
+   (int)(WaveTrackViewConstants::obsoleteWaveformDBDisplay),
+   (int)(WaveTrackViewConstants::Spectrum)
 };
 static const size_t nChoicesView = WXSIZEOF(choicesView);
 static_assert( nChoicesView == WXSIZEOF(intChoicesView), "size mismatch" );
 
 static const size_t defaultChoiceView = 0;
 
-class TracksViewModeSetting : public EncodedEnumSetting {
+class TracksViewModeSetting : public EnumSetting {
 public:
    TracksViewModeSetting(
       const wxString &key,
@@ -82,7 +79,7 @@ public:
       const int intValues[],
       const wxString &oldKey
    )
-      : EncodedEnumSetting{
+      : EnumSetting{
          key, symbols, nSymbols, defaultSymbol, intValues, oldKey }
    {}
 
@@ -91,7 +88,7 @@ public:
       // Special logic for this preference which was twice migrated!
 
       // First test for the older but not oldest key:
-      EncodedEnumSetting::Migrate(value);
+      EnumSetting::Migrate(value);
       if (!value.empty())
          return;
 
@@ -103,11 +100,11 @@ public:
       int oldMode;
       gPrefs->Read(wxT("/GUI/DefaultViewMode"), // The very old key
          &oldMode,
-         (int)(WaveTrack::Waveform));
-      auto viewMode = WaveTrack::ConvertLegacyDisplayValue(oldMode);
+         (int)(WaveTrackViewConstants::Waveform));
+      auto viewMode = WaveTrackViewConstants::ConvertLegacyDisplayValue(oldMode);
 
       // Now future-proof 2.1.1 against a recurrence of this sort of bug!
-      viewMode = WaveTrack::ValidateWaveTrackDisplay(viewMode);
+      viewMode = WaveTrackViewConstants::ValidateWaveTrackDisplay(viewMode);
 
       const_cast<TracksViewModeSetting*>(this)->WriteInt( viewMode );
       gPrefs->Flush();
@@ -124,9 +121,9 @@ static TracksViewModeSetting viewModeSetting{
    wxT("/GUI/DefaultViewModeNew")
 };
 
-WaveTrack::WaveTrackDisplay TracksPrefs::ViewModeChoice()
+WaveTrackViewConstants::Display TracksPrefs::ViewModeChoice()
 {
-   return (WaveTrack::WaveTrackDisplay) viewModeSetting.ReadInt();
+   return (WaveTrackViewConstants::Display) viewModeSetting.ReadInt();
 }
 
 //////////
@@ -136,15 +133,15 @@ static const EnumValueSymbol choicesSampleDisplay[] = {
 };
 static const size_t nChoicesSampleDisplay = WXSIZEOF( choicesSampleDisplay );
 static const int intChoicesSampleDisplay[] = {
-   (int) WaveTrack::LinearInterpolate,
-   (int) WaveTrack::StemPlot
+   (int) WaveTrackViewConstants::LinearInterpolate,
+   (int) WaveTrackViewConstants::StemPlot
 };
 static_assert(
    nChoicesSampleDisplay == WXSIZEOF(intChoicesSampleDisplay), "size mismatch" );
 
 static const size_t defaultChoiceSampleDisplay = 1;
 
-static EncodedEnumSetting sampleDisplaySetting{
+static EnumSetting sampleDisplaySetting{
    wxT("/GUI/SampleViewChoice"),
    choicesSampleDisplay, nChoicesSampleDisplay, defaultChoiceSampleDisplay,
 
@@ -152,9 +149,9 @@ static EncodedEnumSetting sampleDisplaySetting{
    wxT("/GUI/SampleView")
 };
 
-WaveTrack::SampleDisplay TracksPrefs::SampleViewChoice()
+WaveTrackViewConstants::SampleDisplay TracksPrefs::SampleViewChoice()
 {
-   return (WaveTrack::SampleDisplay) sampleDisplaySetting.ReadInt();
+   return (WaveTrackViewConstants::SampleDisplay) sampleDisplaySetting.ReadInt();
 }
 
 //////////
@@ -177,27 +174,27 @@ static const EnumValueSymbol choicesZoom[] = {
 };
 static const size_t nChoicesZoom = WXSIZEOF( choicesZoom );
 static const int intChoicesZoom[] = {
-   WaveTrack::kZoomToFit,
-   WaveTrack::kZoomToSelection,
-   WaveTrack::kZoomDefault,
-   WaveTrack::kZoomMinutes,
-   WaveTrack::kZoomSeconds,
-   WaveTrack::kZoom5ths,
-   WaveTrack::kZoom10ths,
-   WaveTrack::kZoom20ths,
-   WaveTrack::kZoom50ths,
-   WaveTrack::kZoom100ths,
-   WaveTrack::kZoom500ths,
-   WaveTrack::kZoomMilliSeconds,
-   WaveTrack::kZoomSamples,
-   WaveTrack::kZoom4To1,
-   WaveTrack::kMaxZoom,
+   WaveTrackViewConstants::kZoomToFit,
+   WaveTrackViewConstants::kZoomToSelection,
+   WaveTrackViewConstants::kZoomDefault,
+   WaveTrackViewConstants::kZoomMinutes,
+   WaveTrackViewConstants::kZoomSeconds,
+   WaveTrackViewConstants::kZoom5ths,
+   WaveTrackViewConstants::kZoom10ths,
+   WaveTrackViewConstants::kZoom20ths,
+   WaveTrackViewConstants::kZoom50ths,
+   WaveTrackViewConstants::kZoom100ths,
+   WaveTrackViewConstants::kZoom500ths,
+   WaveTrackViewConstants::kZoomMilliSeconds,
+   WaveTrackViewConstants::kZoomSamples,
+   WaveTrackViewConstants::kZoom4To1,
+   WaveTrackViewConstants::kMaxZoom,
 };
 static_assert( nChoicesZoom == WXSIZEOF(intChoicesZoom), "size mismatch" );
 
 static const size_t defaultChoiceZoom1 = 2; // kZoomDefault
 
-static EncodedEnumSetting zoom1Setting{
+static EnumSetting zoom1Setting{
    wxT("/GUI/ZoomPreset1Choice"),
    choicesZoom, nChoicesZoom, defaultChoiceZoom1,
 
@@ -207,7 +204,7 @@ static EncodedEnumSetting zoom1Setting{
 
 static const size_t defaultChoiceZoom2 = 13; // kZoom4To1
 
-static EncodedEnumSetting zoom2Setting{
+static EnumSetting zoom2Setting{
    wxT("/GUI/ZoomPreset2Choice"),
    choicesZoom, nChoicesZoom, defaultChoiceZoom2,
 
@@ -215,14 +212,14 @@ static EncodedEnumSetting zoom2Setting{
    wxT("/GUI/ZoomPreset2")
 };
 
-WaveTrack::ZoomPresets TracksPrefs::Zoom1Choice()
+WaveTrackViewConstants::ZoomPresets TracksPrefs::Zoom1Choice()
 {
-   return (WaveTrack::ZoomPresets) zoom1Setting.ReadInt();
+   return (WaveTrackViewConstants::ZoomPresets) zoom1Setting.ReadInt();
 }
 
-WaveTrack::ZoomPresets TracksPrefs::Zoom2Choice()
+WaveTrackViewConstants::ZoomPresets TracksPrefs::Zoom2Choice()
 {
-   return (WaveTrack::ZoomPresets) zoom2Setting.ReadInt();
+   return (WaveTrackViewConstants::ZoomPresets) zoom2Setting.ReadInt();
 }
 
 //////////
@@ -237,6 +234,21 @@ TracksPrefs::TracksPrefs(wxWindow * parent, wxWindowID winid)
 
 TracksPrefs::~TracksPrefs()
 {
+}
+
+ComponentInterfaceSymbol TracksPrefs::GetSymbol()
+{
+   return TRACKS_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString TracksPrefs::GetDescription()
+{
+   return _("Preferences for Tracks");
+}
+
+wxString TracksPrefs::HelpPageName()
+{
+   return "Tracks_Preferences";
 }
 
 void TracksPrefs::Populate()
@@ -392,13 +404,9 @@ bool TracksPrefs::Commit()
    return true;
 }
 
-wxString TracksPrefs::HelpPageName()
-{
-   return "Tracks_Preferences";
-}
-
-PrefsPanel *TracksPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+TracksPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew TracksPrefs(parent, winid);
-}
+};

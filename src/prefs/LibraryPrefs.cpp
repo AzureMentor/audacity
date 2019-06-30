@@ -26,11 +26,10 @@ MP3 and FFmpeg encoding libraries.
 #include <wx/stattext.h>
 
 #include "../FFmpeg.h"
-#include "../ShuttleGui.h"
 #include "../export/ExportMP3.h"
 #include "../widgets/LinkingHtmlWindow.h"
 #include "../widgets/HelpSystem.h"
-#include "../widgets/ErrorDialog.h"
+#include "../widgets/AudacityMessageBox.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +55,21 @@ LibraryPrefs::LibraryPrefs(wxWindow * parent, wxWindowID winid)
 
 LibraryPrefs::~LibraryPrefs()
 {
+}
+
+ComponentInterfaceSymbol LibraryPrefs::GetSymbol()
+{
+   return LIBRARY_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString LibraryPrefs::GetDescription()
+{
+   return _("Preferences for Library");
+}
+
+wxString LibraryPrefs::HelpPageName()
+{
+   return "Libraries_Preferences";
 }
 
 /// Creates the dialog and its contents.
@@ -252,13 +266,9 @@ bool LibraryPrefs::Commit()
    return true;
 }
 
-wxString LibraryPrefs::HelpPageName()
-{
-   return "Libraries_Preferences";
-}
-
-PrefsPanel *LibraryPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+LibraryPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew LibraryPrefs(parent, winid);
-}
+};

@@ -15,6 +15,7 @@
 
 #include "../Audacity.h"
 #include "ScrubbingToolBar.h"
+#include "ToolManager.h"
 
 // For compilers that support precompilation, includes "wx/wx.h".
 #include <wx/wxprec.h>
@@ -31,17 +32,11 @@
 
 #include "../AdornedRulerPanel.h"
 #include "../AllThemeResources.h"
-#include "../AudioIO.h"
 #include "../ImageManipulation.h"
-#include "../Internat.h"
 #include "../Prefs.h"
-#include "../Project.h"
-#include "../Theme.h"
-#include "../Track.h"
 #include "../UndoManager.h"
 #include "../widgets/AButton.h"
 #include "../tracks/ui/Scrubbing.h"
-#include "../commands/CommandContext.h"
 
 IMPLEMENT_CLASS(ScrubbingToolBar, ToolBar);
 
@@ -60,8 +55,8 @@ EVT_COMMAND_RANGE( STBFirstButton,
 END_EVENT_TABLE()
 
 //Standard contructor
-ScrubbingToolBar::ScrubbingToolBar()
-: ToolBar(ScrubbingBarID, _("Scrub"), wxT("Scrub"))
+ScrubbingToolBar::ScrubbingToolBar( AudacityProject &project )
+: ToolBar(project, ScrubbingBarID, _("Scrub"), wxT("Scrub"))
 {
 }
 
@@ -69,9 +64,21 @@ ScrubbingToolBar::~ScrubbingToolBar()
 {
 }
 
+ScrubbingToolBar &ScrubbingToolBar::Get( AudacityProject &project )
+{
+   auto &toolManager = ToolManager::Get( project );
+   return *static_cast<ScrubbingToolBar*>( toolManager.GetToolBar(ScrubbingBarID) );
+}
+
+const ScrubbingToolBar &ScrubbingToolBar::Get( const AudacityProject &project )
+{
+   return Get( const_cast<AudacityProject&>( project )) ;
+}
+
 void ScrubbingToolBar::Create(wxWindow * parent)
 {
    ToolBar::Create(parent);
+   UpdatePrefs();
 }
 
 /// This is a convenience function that allows for button creation in
@@ -140,12 +147,12 @@ void ScrubbingToolBar::RegenerateTooltips()
    (AButton &button, const wxString &label, const CommandID &cmd)
    {
       TranslatedInternalString command{ cmd, label };
-      ToolBar::SetButtonToolTip( button, &command, 1u );
+      ToolBar::SetButtonToolTip( mProject, button, &command, 1u );
    };
 
-   auto project = GetActiveProject();
+   auto project = &mProject;
    if (project) {
-      auto &scrubber = project->GetScrubber();
+      auto &scrubber = Scrubber::Get( *project );
 
       const auto scrubButton = mButtons[STBScrubID];
       const auto seekButton = mButtons[STBSeekID];
@@ -174,7 +181,7 @@ void ScrubbingToolBar::RegenerateTooltips()
       fn(*seekButton, label, wxT("Seek"));
 
       label = (
-               project->GetRulerPanel()->ShowingScrubRuler()
+               AdornedRulerPanel::Get( *project ).ShowingScrubRuler()
                ? _("Hide Scrub Ruler")
                : _("Show Scrub Ruler")
                );
@@ -185,9 +192,9 @@ void ScrubbingToolBar::RegenerateTooltips()
 
 void ScrubbingToolBar::OnButton(wxCommandEvent &event)
 {
-   AudacityProject *p = GetActiveProject();
+   AudacityProject *p = &mProject;
    if (!p) return;
-   auto &scrubber = p->GetScrubber();
+   auto &scrubber = Scrubber::Get( *p );
 
    int id = event.GetId();
 
@@ -215,10 +222,10 @@ void ScrubbingToolBar::EnableDisableButtons()
    const auto seekButton = mButtons[STBSeekID];
    seekButton->SetEnabled(true);
 
-   AudacityProject *p = GetActiveProject();
+   AudacityProject *p = &mProject;
    if (!p) return;
 
-   auto &scrubber = p->GetScrubber();
+   auto &scrubber = Scrubber::Get( *p );
    const auto canScrub = scrubber.CanScrub();
 
    if (scrubber.Scrubs()) {
@@ -247,10 +254,15 @@ void ScrubbingToolBar::EnableDisableButtons()
 
    const auto barButton = mButtons[STBRulerID];
    barButton->Enable();
-   if (p->GetRulerPanel()->ShowingScrubRuler())
+   if (AdornedRulerPanel::Get( *p ).ShowingScrubRuler())
       barButton->PushDown();
    else
       barButton->PopUp();
    RegenerateTooltips();
    scrubber.CheckMenuItems();
 }
+
+static RegisteredToolbarFactory factory{ ScrubbingBarID,
+   []( AudacityProject &project ){
+      return ToolBar::Holder{ safenew ScrubbingToolBar{ project } }; }
+};

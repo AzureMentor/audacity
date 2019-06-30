@@ -5,13 +5,8 @@ set(TARGET libflac)
 set(TARGET_SOURCE ${LIB_SRC_DIRECTORY}${TARGET})
 project(${TARGET} VERSION 1.3.1)
 
-option(FLAC_WITH_OGG "ogg support (default: test for libogg)" OFF)
 option(FLAC_ENABLE_64_BIT_WORDS "Set FLAC__BYTES_PER_WORD to 8 (4 is the default)" OFF)
 option(FLAC_WITH_ASM "Use any assembly optimization routines" ON)
-
-if(WITH_OGG)
-    find_package(OGG REQUIRED)
-endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     if(CMAKE_BULD_TYPE STREQUAL Release)
@@ -90,7 +85,6 @@ add_compile_definitions(
     CPU_IS_BIG_ENDIAN=$<BOOL:${CPU_IS_BIG_ENDIAN}>
     CPU_IS_LITTLE_ENDIAN=$<NOT:${CPU_IS_BIG_ENDIAN}>
     FLAC__HAS_X86INTRIN=$<BOOL:${HAVE_X86INTRIN_H}>
-    FLAC__HAS_OGG=$<BOOL:${OGG_FOUND}>
     FLAC__USE_AVX=$<BOOL:${WITH_AVX}>
     $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:FLAC__OVERFLOW_DETECT>
     _ALL_SOURCE
@@ -193,24 +187,27 @@ add_library(FLAC-static STATIC
     "${TARGET_SOURCE}/src/libFLAC/stream_encoder_intrin_avx2.c"
     "${TARGET_SOURCE}/src/libFLAC/stream_encoder_framing.c"
     "${TARGET_SOURCE}/src/libFLAC/window.c"
-    "$<$<BOOL:${OGG_FOUND}>:${TARGET_SOURCE}/src/libFLAC/ogg_decoder_aspect.c>"
-    "$<$<BOOL:${OGG_FOUND}>:${TARGET_SOURCE}/src/libFLAC/ogg_encoder_aspect.c>"
-    "$<$<BOOL:${OGG_FOUND}>:${TARGET_SOURCE}/src/libFLAC/ogg_helper.c>"
-    "$<$<BOOL:${OGG_FOUND}>:${TARGET_SOURCE}/src/libFLAC/ogg_mapping.c>"
-    "$<$<BOOL:${WIN32}>:${TARGET_SOURCE}/src/libFLAC/windows_unicode_filenames.c>")
+    "${TARGET_SOURCE}/src/libFLAC/ogg_decoder_aspect.c"
+    "${TARGET_SOURCE}/src/libFLAC/ogg_encoder_aspect.c"
+    "${TARGET_SOURCE}/src/libFLAC/ogg_helper.c"
+    "${TARGET_SOURCE}/src/libFLAC/ogg_mapping.c"
+    "$<$<BOOL:${WIN32}>:${TARGET_SOURCE}/src/share/win_utf8_io/win_utf8_io.c>")
 
 include_directories(
     "${TARGET_SOURCE}/include"
     "${TARGET_SOURCE}/src/libFLAC/include")
 
-target_compile_definitions(FLAC-static PUBLIC FLAC__NO_DLL)
+target_compile_definitions(FLAC-static PUBLIC FLAC__NO_DLL FLAC__HAS_OGG)
 target_include_directories(FLAC-static INTERFACE
     "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>")
 target_link_libraries(FLAC-static PUBLIC
-    $<TARGET_NAME_IF_EXISTS:Ogg::Ogg>
+    libogg
     $<TARGET_NAME_IF_EXISTS:FLAC-asm>
-    $<$<BOOL:${HAVE_LROUND}>:m>)
-set_target_properties(FLAC-static PROPERTIES OSX_ARCHITECTURES "")
+    $<$<BOOL:${HAVE_LROUND}>:m>
+    $<TARGET_NAME_IF_EXISTS:win_utf8_io>)
+set_target_properties(FLAC-static PROPERTIES
+    OSX_ARCHITECTURES ""
+    OUTPUT_NAME libflac)
 
 add_library(FLACXX-static STATIC
     "${TARGET_SOURCE}/src/libFLAC++/metadata.cpp"
@@ -220,4 +217,6 @@ target_compile_definitions(FLACXX-static PUBLIC FLAC__NO_DLL)
 target_include_directories(FLACXX-static INTERFACE
     "$<BUILD_INTERFACE:${TARGET_SOURCE}/include>")
 target_link_libraries(FLACXX-static PUBLIC FLAC-static)
-set_target_properties(FLACXX-static PROPERTIES OSX_ARCHITECTURES "")
+set_target_properties(FLACXX-static PROPERTIES
+    OSX_ARCHITECTURES ""
+    OUTPUT_NAME libflac++)

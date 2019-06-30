@@ -33,20 +33,19 @@ KeyConfigPrefs and MousePrefs use.
 #include <wx/radiobut.h>
 #include <wx/stattext.h>
 #include <wx/statbox.h>
+#include <wx/textctrl.h>
 
 #include "../Prefs.h"
 #include "../Project.h"
 #include "../commands/CommandManager.h"
-#include "../commands/Keyboard.h"
 #include "../xml/XMLFileReader.h"
 
-#include "../Internat.h"
 #include "../ShuttleGui.h"
 
 #include "../FileNames.h"
 
 #include "../widgets/KeyView.h"
-#include "../widgets/ErrorDialog.h"
+#include "../widgets/AudacityMessageBox.h"
 
 #if wxUSE_ACCESSIBILITY
 #include "../widgets/WindowAccessible.h"
@@ -98,6 +97,21 @@ KeyConfigPrefs::KeyConfigPrefs(wxWindow * parent, wxWindowID winid,
    }
 }
 
+ComponentInterfaceSymbol KeyConfigPrefs::GetSymbol()
+{
+   return KEY_CONFIG_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString KeyConfigPrefs::GetDescription()
+{
+   return _("Preferences for KeyConfig");
+}
+
+wxString KeyConfigPrefs::HelpPageName()
+{
+   return "Keyboard_Preferences";
+}
+
 void KeyConfigPrefs::Populate()
 {
    ShuttleGui S(this, eIsCreatingFromPrefs);
@@ -122,7 +136,7 @@ void KeyConfigPrefs::Populate()
 
    mCommandSelected = wxNOT_FOUND;
 
-   mManager = project->GetCommandManager();
+   mManager = &CommandManager::Get( *project );
 
    // For speed, don't sort here.  We're just creating.
    // Instead sort when we do SetView later in this function.
@@ -642,12 +656,13 @@ bool KeyConfigPrefs::Commit()
    bool bFull = gPrefs->ReadBool(wxT("/GUI/Shortcuts/FullDefaults"), false);
    for (size_t i = 0; i < mNames.size(); i++) {
       const auto &dkey = bFull ? mDefaultKeys[i] : mStandardDefaultKeys[i];
-      wxString name = wxT("/NewKeys/") + mNames[i];
+      // using GET to interpret CommandID as a config path component
+      auto name = wxT("/NewKeys/") + mNames[i].GET();
       const auto &key = mNewKeys[i];
 
       if (gPrefs->HasEntry(name)) {
-         if (key != NormalizedKeyString{ gPrefs->Read(name, key.Raw()) } ) {
-            gPrefs->Write(name, key.Raw());
+         if (key != NormalizedKeyString{ gPrefs->ReadObject(name, key) } ) {
+            gPrefs->Write(name, key);
          }
          if (key == dkey) {
             gPrefs->DeleteEntry(name);
@@ -655,7 +670,7 @@ bool KeyConfigPrefs::Commit()
       }
       else {
          if (key != dkey) {
-            gPrefs->Write(name, key.Raw());
+            gPrefs->Write(name, key);
          }
       }
    }
@@ -673,14 +688,13 @@ void KeyConfigPrefs::Cancel()
    return;
 }
 
-wxString KeyConfigPrefs::HelpPageName()
+PrefsPanel::Factory
+KeyConfigPrefsFactory( const CommandID &name )
 {
-   return "Keyboard_Preferences";
-}
-
-PrefsPanel *KeyConfigPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
-{
-   wxASSERT(parent); // to justify safenew
-   auto result = safenew KeyConfigPrefs{ parent, winid, mName };
-   return result;
+   return [=](wxWindow *parent, wxWindowID winid)
+   {
+      wxASSERT(parent); // to justify safenew
+      auto result = safenew KeyConfigPrefs{ parent, winid, name };
+      return result;
+   };
 }

@@ -25,6 +25,8 @@ other settings.
 #include "../Audacity.h"
 #include "DevicePrefs.h"
 
+#include "RecordingPrefs.h"
+
 #include <wx/defs.h>
 
 #include <wx/choice.h>
@@ -34,8 +36,6 @@ other settings.
 
 #include "portaudio.h"
 
-#include "../AudioIO.h"
-#include "../Internat.h"
 #include "../Prefs.h"
 #include "../ShuttleGui.h"
 #include "../DeviceManager.h"
@@ -62,6 +62,22 @@ DevicePrefs::~DevicePrefs()
 {
 }
 
+
+ComponentInterfaceSymbol DevicePrefs::GetSymbol()
+{
+   return DEVICE_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString DevicePrefs::GetDescription()
+{
+   return _("Preferences for Device");
+}
+
+wxString DevicePrefs::HelpPageName()
+{
+   return "Devices_Preferences";
+}
+
 void DevicePrefs::Populate()
 {
    // First any pre-processing for constructing the GUI.
@@ -84,6 +100,7 @@ void DevicePrefs::Populate()
    wxCommandEvent e;
    OnHost(e);
 }
+
 
 /*
  * Get names of device hosts.
@@ -403,13 +420,10 @@ bool DevicePrefs::Commit()
    return true;
 }
 
-wxString DevicePrefs::HelpPageName()
-{
-   return "Devices_Preferences";
-}
+PrefsPanel::Factory
+DevicePrefsFactory = [](wxWindow *parent, wxWindowID winid)
 
-PrefsPanel *DevicePrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew DevicePrefs(parent, winid);
-}
+};

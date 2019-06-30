@@ -93,17 +93,19 @@
 #include "../PlatformCompatibility.h"
 #include "../FileNames.h"
 #include "../Envelope.h"
+#include "../EnvelopeEditor.h"
 #include "../widgets/LinkingHtmlWindow.h"
 #include "../widgets/ErrorDialog.h"
 #include "../FFT.h"
 #include "../Prefs.h"
 #include "../Project.h"
+#include "../ProjectSettings.h"
 #include "../TrackArtist.h"
 #include "../WaveClip.h"
+#include "../ViewInfo.h"
 #include "../WaveTrack.h"
 #include "../widgets/Ruler.h"
 #include "../xml/XMLFileReader.h"
-#include "../Theme.h"
 #include "../AllThemeResources.h"
 #include "../float_cast.h"
 
@@ -510,7 +512,7 @@ bool EffectEqualization::Init()
    double rate = 0.0;
 
    auto trackRange =
-      GetActiveProject()->GetTracks()->Selected< const WaveTrack >();
+      TrackList::Get( *GetActiveProject() ).Selected< const WaveTrack >();
    if (trackRange) {
       rate = (*(trackRange.first++)) -> GetRate();
       ++selcount;
@@ -620,7 +622,11 @@ void EffectEqualization::PopulateOrExchange(ShuttleGui & S)
    LoadCurves();
 
    const auto t = *inputTracks()->Any< const WaveTrack >().first;
-   mHiFreq = (t ? t->GetRate() : GetActiveProject()->GetRate()) / 2.0;
+   mHiFreq =
+      (t
+         ? t->GetRate()
+         : ProjectSettings::Get( *GetActiveProject() ).GetRate())
+      / 2.0;
    mLoFreq = loFreqI;
 
    S.SetBorder(0);
@@ -737,7 +743,7 @@ void EffectEqualization::PopulateOrExchange(ShuttleGui & S)
 
          for (int i = 0; (i < NUMBER_OF_BANDS) && (kThirdOct[i] <= mHiFreq); ++i)
          {
-            mSliders[i] = safenew wxSlider(mGraphicPanel, ID_Slider + i, 0, -20, +20,
+            mSliders[i] = safenew wxSliderWrapper(mGraphicPanel, ID_Slider + i, 0, -20, +20,
                wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL | wxSL_INVERSE);
 
             mSliders[i]->Bind(wxEVT_ERASE_BACKGROUND,
@@ -1092,7 +1098,7 @@ bool EffectEqualization::ProcessOne(int count, WaveTrack * t,
 {
    // create a NEW WaveTrack to hold all of the output, including 'tails' each end
    AudacityProject *p = GetActiveProject();
-   auto output = p->GetTrackFactory()->NewWaveTrack(floatSample, t->GetRate());
+   auto output = TrackFactory::Get( *p ).NewWaveTrack(floatSample, t->GetRate());
 
    wxASSERT(mM - 1 < windowSize);
    size_t L = windowSize - (mM - 1);   //Process L samples at a go
@@ -3108,7 +3114,7 @@ void EqualizationPanel::OnPaint(wxPaintEvent &  WXUNUSED(event))
 
       artist.pZoomInfo = &zoomInfo;
       TrackPanelDrawingContext context{ memDC, {}, {}, &artist  };
-      mEffect->mEnvelope->DrawPoints(
+      EnvelopeEditor::DrawPoints( *mEffect->mEnvelope,
          context, mEnvRect, false, 0.0,
       mEffect->mdBMin, mEffect->mdBMax, false);
    }

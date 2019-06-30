@@ -34,15 +34,15 @@ other settings.
 
 #include <wx/choice.h>
 #include <wx/intl.h>
+#include <wx/textctrl.h>
 
 #include "../../lib-src/portmidi/pm_common/portmidi.h"
 
-#include "../AudioIO.h"
-#include "../Internat.h"
 #include "../Prefs.h"
-#include "../Project.h"
 #include "../ShuttleGui.h"
-#include "../widgets/ErrorDialog.h"
+#include "../widgets/AudacityMessageBox.h"
+
+#define DEFAULT_SYNTH_LATENCY 5
 
 enum {
    HostID = 10000,
@@ -65,6 +65,21 @@ MidiIOPrefs::MidiIOPrefs(wxWindow * parent, wxWindowID winid)
 
 MidiIOPrefs::~MidiIOPrefs()
 {
+}
+
+ComponentInterfaceSymbol MidiIOPrefs::GetSymbol()
+{
+   return MIDI_IO_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString MidiIOPrefs::GetDescription()
+{
+   return _("Preferences for MidiIO");
+}
+
+wxString MidiIOPrefs::HelpPageName()
+{
+   return "MIDI_Devices_Preferences";
 }
 
 void MidiIOPrefs::Populate()
@@ -284,15 +299,11 @@ bool MidiIOPrefs::Validate()
    return true;
 }
 
-wxString MidiIOPrefs::HelpPageName()
-{
-   return "MIDI_Devices_Preferences";
-}
-
-PrefsPanel *MidiIOPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+MidiIOPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew MidiIOPrefs(parent, winid);
-}
+};
 
 #endif

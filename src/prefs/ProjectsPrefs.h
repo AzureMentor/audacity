@@ -19,11 +19,16 @@
 
 class ShuttleGui;
 
+#define PROJECTS_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Projects") }
+
 class ProjectsPrefs final : public PrefsPanel
 {
  public:
    ProjectsPrefs(wxWindow * parent, wxWindowID winid);
    ~ProjectsPrefs();
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    bool Commit() override;
    wxString HelpPageName() override;
    void PopulateOrExchange(ShuttleGui & S) override;
@@ -32,10 +37,6 @@ class ProjectsPrefs final : public PrefsPanel
    void Populate();
 };
 
-/// A PrefsPanelFactory that creates one ProjectPrefs panel.
-class ProjectsPrefsFactory final : public PrefsPanelFactory
-{
-public:
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-};
+/// A PrefsPanel::Factory that creates one ProjectPrefs panel.
+extern PrefsPanel::Factory ProjectsPrefsFactory;
 #endif

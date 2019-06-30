@@ -14,13 +14,13 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../../../Experimental.h"
 
 #include <algorithm>
-#include "../../../../MemoryX.h"
 #include <wx/gdicmn.h>
 
 #include "../../../../Envelope.h"
 #include "../../../../HitTestResult.h"
 #include "../../../../prefs/WaveformSettings.h"
-#include "../../../../Project.h"
+#include "../../../../ProjectAudioIO.h"
+#include "../../../../ProjectHistory.h"
 #include "../../../../RefreshCode.h"
 #include "../../../../TrackArtist.h"
 #include "../../../../TrackPanelMouseEvent.h"
@@ -28,7 +28,7 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../../../ViewInfo.h"
 #include "../../../../WaveTrack.h"
 #include "../../../../../images/Cursors.h"
-#include "../../../../widgets/ErrorDialog.h"
+#include "../../../../widgets/AudacityMessageBox.h"
 
 
 static const int SMOOTHING_KERNEL_RADIUS = 3;
@@ -114,14 +114,14 @@ UIHandlePtr SampleHandle::HitTest
  const wxMouseState &state, const wxRect &rect,
  const AudacityProject *pProject, const std::shared_ptr<WaveTrack> &pTrack)
 {
-   const ViewInfo &viewInfo = pProject->GetViewInfo();
+   const auto &viewInfo = ViewInfo::Get( *pProject );
 
    /// method that tells us if the mouse event landed on an
    /// editable sample
    const auto wavetrack = pTrack.get();
 
    const int displayType = wavetrack->GetDisplay();
-   if (WaveTrack::Waveform != displayType)
+   if (WaveTrackViewConstants::Waveform != displayType)
       return {};  // Not a wave, so return.
 
    const double tt =
@@ -181,7 +181,7 @@ namespace {
       //Get out of here if we shouldn't be drawing right now:
       //If we aren't displaying the waveform, Display a message dialog
       const int display = wt->GetDisplay();
-      if (WaveTrack::Waveform != display)
+      if (WaveTrackViewConstants::Waveform != display)
       {
          AudacityMessageBox(_(
 "To use Draw, choose 'Waveform' or 'Waveform (dB)' in the Track Dropdown Menu."),
@@ -206,13 +206,13 @@ UIHandle::Result SampleHandle::Click
 (const TrackPanelMouseEvent &evt, AudacityProject *pProject)
 {
    using namespace RefreshCode;
-   const bool unsafe = pProject->IsAudioActive();
+   const bool unsafe = ProjectAudioIO::Get( *pProject ).IsAudioActive();
    if ( unsafe )
       return Cancelled;
 
    const wxMouseEvent &event = evt.event;
    const wxRect &rect = evt.rect;
-   const ViewInfo &viewInfo = pProject->GetViewInfo();
+   const auto &viewInfo = ViewInfo::Get( *pProject );
    const auto pTrack = mClickedTrack.get();
 
    /// Someone has just clicked the mouse.  What do we do?
@@ -336,9 +336,9 @@ UIHandle::Result SampleHandle::Drag
 {
    using namespace RefreshCode;
    const wxMouseEvent &event = evt.event;
-   const ViewInfo &viewInfo = pProject->GetViewInfo();
+   const auto &viewInfo = ViewInfo::Get( *pProject );
 
-   const bool unsafe = pProject->IsAudioActive();
+   const bool unsafe = ProjectAudioIO::Get( *pProject ).IsAudioActive();
    if (unsafe) {
       this->Cancel(pProject);
       return RefreshCell | Cancelled;
@@ -417,7 +417,7 @@ UIHandle::Result SampleHandle::Drag
 HitTestPreview SampleHandle::Preview
 (const TrackPanelMouseState &st, const AudacityProject *pProject)
 {
-   const bool unsafe = pProject->IsAudioActive();
+   const bool unsafe = ProjectAudioIO::Get( *pProject ).IsAudioActive();
    return HitPreview(st.state, pProject, unsafe);
 }
 
@@ -425,7 +425,7 @@ UIHandle::Result SampleHandle::Release
 (const TrackPanelMouseEvent &, AudacityProject *pProject,
  wxWindow *)
 {
-   const bool unsafe = pProject->IsAudioActive();
+   const bool unsafe = ProjectAudioIO::Get( *pProject ).IsAudioActive();
    if (unsafe)
       return this->Cancel(pProject);
 
@@ -434,7 +434,7 @@ UIHandle::Result SampleHandle::Release
    //*************************************************
    //On up-click, send the state to the undo stack
    mClickedTrack.reset();       //Set this to NULL so it will catch improper drag events.
-   pProject->PushState(_("Moved Samples"),
+   ProjectHistory::Get( *pProject ).PushState(_("Moved Samples"),
       _("Sample Edit"),
       UndoPush::CONSOLIDATE | UndoPush::AUTOSAVE);
 
@@ -444,7 +444,7 @@ UIHandle::Result SampleHandle::Release
 
 UIHandle::Result SampleHandle::Cancel(AudacityProject *pProject)
 {
-   pProject->RollbackState();
+   ProjectHistory::Get( *pProject ).RollbackState();
    mClickedTrack.reset();
    return RefreshCode::RefreshCell;
 }

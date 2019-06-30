@@ -14,9 +14,7 @@
 #ifndef __AUDACITY_CONTROL_TOOLBAR__
 #define __AUDACITY_CONTROL_TOOLBAR__
 
-#include "../MemoryX.h"
 #include "ToolBar.h"
-#include "../Theme.h"
 
 class wxBoxSizer;
 class wxCommandEvent;
@@ -30,28 +28,37 @@ class wxStatusBar;
 class AButton;
 class AudacityProject;
 class TrackList;
-class TimeTrack;
 
 struct AudioIOStartStreamOptions;
 class SelectedRegion;
 
-// Defined in Project.h
-enum class PlayMode : int;
+enum class PlayMode : int {
+   normalPlay,
+   oneSecondPlay, // Disables auto-scrolling
+   loopedPlay, // Disables auto-scrolling
+   cutPreviewPlay
+};
 
 class WaveTrack;
 using WaveTrackArray = std::vector < std::shared_ptr < WaveTrack > >;
 
 struct TransportTracks;
+TransportTracks GetAllPlaybackTracks(
+   TrackList &trackList, bool selectedOnly, bool useMidi = false);
 
 // In the GUI, ControlToolBar appears as the "Transport Toolbar". "Control Toolbar" is historic.
 class ControlToolBar final : public ToolBar {
 
  public:
 
-   ControlToolBar();
+   ControlToolBar( AudacityProject &project );
    virtual ~ControlToolBar();
 
-   static bool IsTransportingPinned();
+   bool IsTransportingPinned() const;
+
+   static ControlToolBar *Find( AudacityProject &project );
+   static ControlToolBar &Get( AudacityProject &project );
+   static const ControlToolBar &Get( const AudacityProject &project );
 
    void Create(wxWindow *parent) override;
 
@@ -92,7 +99,7 @@ class ControlToolBar final : public ToolBar {
    bool IsRecordDown() const;
 
    // A project is only allowed to stop an audio stream that it owns.
-   bool CanStopAudioStream ();
+   bool CanStopAudioStream () const;
 
    // Play currently selected region, or if nothing selected,
    // play from current cursor.
@@ -102,7 +109,6 @@ class ControlToolBar final : public ToolBar {
    int PlayPlayRegion(const SelectedRegion &selectedRegion,
                       const AudioIOStartStreamOptions &options,
                       PlayMode playMode,
-                      PlayAppearance appearance = PlayAppearance::Straight,
                       bool backwards = false,
                       // Allow t0 and t1 to be beyond end of tracks
                       bool playWhiteSpace = false);
@@ -129,11 +135,10 @@ class ControlToolBar final : public ToolBar {
    void StartScrolling();
    void StopScrolling();
 
-   // Commit the addition of temporary recording tracks into the project
-   void CommitRecording();
-
    // Cancel the addition of temporary recording tracks into the project
    void CancelRecording();
+
+   PlayMode GetLastPlayMode() const { return mLastPlayMode; }
 
  private:
 
@@ -194,11 +199,18 @@ class ControlToolBar final : public ToolBar {
    wxString mStateRecord;
    wxString mStatePause;
 
+   PlayMode mLastPlayMode{ PlayMode::normalPlay };
+
  public:
 
    DECLARE_CLASS(ControlToolBar)
    DECLARE_EVENT_TABLE()
 };
+
+#include "../commands/CommandFlag.h"
+
+extern const ReservedCommandFlag
+   CanStopAudioStreamFlag;
 
 #endif
 

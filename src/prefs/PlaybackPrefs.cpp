@@ -26,7 +26,6 @@
 
 #include "../ShuttleGui.h"
 #include "../Prefs.h"
-#include "../Internat.h"
 
 PlaybackPrefs::PlaybackPrefs(wxWindow * parent, wxWindowID winid)
 :  PrefsPanel(parent, winid, _("Playback"))
@@ -36,6 +35,21 @@ PlaybackPrefs::PlaybackPrefs(wxWindow * parent, wxWindowID winid)
 
 PlaybackPrefs::~PlaybackPrefs()
 {
+}
+
+ComponentInterfaceSymbol PlaybackPrefs::GetSymbol()
+{
+   return PLAYBACK_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString PlaybackPrefs::GetDescription()
+{
+   return _("Preferences for Playback");
+}
+
+wxString PlaybackPrefs::HelpPageName()
+{
+   return "Playback_Preferences";
 }
 
 void PlaybackPrefs::Populate()
@@ -168,14 +182,10 @@ bool PlaybackPrefs::Commit()
    return true;
 }
 
-wxString PlaybackPrefs::HelpPageName()
-{
-   return "Playback_Preferences";
-}
-
-PrefsPanel *PlaybackPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+PlaybackPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew PlaybackPrefs(parent, winid);
-}
+};
 

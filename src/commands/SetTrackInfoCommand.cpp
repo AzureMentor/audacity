@@ -37,17 +37,18 @@ SetTrackAudioCommand and SetTrackVisualsCommand.
 #include "SetTrackInfoCommand.h"
 
 #include "../Project.h"
-#include "../Track.h"
 #include "../TrackPanel.h"
 #include "../WaveTrack.h"
 #include "../prefs/WaveformSettings.h"
 #include "../prefs/SpectrogramSettings.h"
 #include "../Shuttle.h"
 #include "../ShuttleGui.h"
+#include "../tracks/ui/TrackView.h"
 #include "CommandContext.h"
 
 SetTrackBase::SetTrackBase(){
    mbPromptForTracks = true;
+   bIsSecondChannel = false;
 }
 
 //Define for the old scheme, where SetTrack defines its own track selection.
@@ -94,8 +95,8 @@ bool SetTrackBase::Apply(const CommandContext & context  )
 {
    long i = 0;// track counter
    long j = 0;// channel counter
-   auto tracks = context.GetProject()->GetTracks();
-   for ( auto t : tracks->Leaders() )
+   auto &tracks = TrackList::Get( context.project );
+   for ( auto t : tracks.Leaders() )
    {
       auto channels = TrackList::Channels(t);
       for ( auto channel : channels ) {
@@ -163,11 +164,11 @@ bool SetTrackStatusCommand::ApplyInner(const CommandContext & context, Track * t
    if( !bIsSecondChannel ){
       if( bHasFocused )
       {
-         TrackPanel *panel = context.GetProject()->GetTrackPanel();
+         auto &panel = TrackPanel::Get( context.project );
          if( bFocused)
-            panel->SetFocusedTrack( t );
-         else if( t== panel->GetFocusedTrack() )
-            panel->SetFocusedTrack( nullptr );
+            panel.SetFocusedTrack( t );
+         else if( t== panel.GetFocusedTrack() )
+            panel.SetFocusedTrack( nullptr );
       }
    }
    return true;
@@ -348,13 +349,13 @@ bool SetTrackVisualsCommand::ApplyInner(const CommandContext & context, Track * 
       wt->SetWaveColorIndex( mColour );
 
    if( t && bHasHeight )
-      t->SetHeight( mHeight );
+      TrackView::Get( *t ).SetHeight( mHeight );
 
    if( wt && bHasDisplayType  )
       wt->SetDisplay(
          (mDisplayType == kWaveform) ?
-            WaveTrack::WaveTrackDisplayValues::Waveform
-            : WaveTrack::WaveTrackDisplayValues::Spectrum
+            WaveTrackViewConstants::Waveform
+            : WaveTrackViewConstants::Spectrum
          );
    if( wt && bHasScaleType )
       wt->GetIndependentWaveformSettings().scaleType = 
@@ -395,8 +396,8 @@ bool SetTrackVisualsCommand::ApplyInner(const CommandContext & context, Track * 
          mVZoomTop = c + ZOOMLIMIT / 2.0;
       }
       wt->SetDisplayBounds(mVZoomBottom, mVZoomTop);
-      TrackPanel *const tp = ::GetActiveProject()->GetTrackPanel();
-      tp->UpdateVRulers();
+      auto &tp = TrackPanel::Get( *::GetActiveProject() );
+      tp.UpdateVRulers();
    }
 
    if( wt && bHasUseSpecPrefs   ){

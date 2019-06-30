@@ -25,20 +25,21 @@ enum DitherType : unsigned;
 
 class wxArrayStringEx;
 
+#define QUALITY_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Quality") }
+
 class QualityPrefs final : public PrefsPanel
 {
  public:
    QualityPrefs(wxWindow * parent, wxWindowID winid);
    virtual ~QualityPrefs();
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
 
    bool Commit() override;
    wxString HelpPageName() override;
    void PopulateOrExchange(ShuttleGui & S) override;
 
    static sampleFormat SampleFormatChoice();
-
-   static DitherType FastDitherChoice();
-   static DitherType BestDitherChoice();
 
  private:
    void Populate();
@@ -55,10 +56,6 @@ class QualityPrefs final : public PrefsPanel
    DECLARE_EVENT_TABLE()
 };
 
-/// A PrefsPanelFactory that creates one QualityPrefs panel.
-class QualityPrefsFactory final : public PrefsPanelFactory
-{
-public:
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-};
+/// A PrefsPanel::Factory that creates one QualityPrefs panel.
+extern PrefsPanel::Factory QualityPrefsFactory;
 #endif

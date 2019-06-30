@@ -23,7 +23,8 @@
 
 #include "../Prefs.h"
 #include "../ShuttleGui.h"
-#include "../widgets/ErrorDialog.h"
+#include "../import/Import.h"
+#include "../widgets/AudacityMessageBox.h"
 #include "../widgets/Grid.h"
 
 #define EXTIMPORT_MIME_SUPPORT 0
@@ -68,6 +69,21 @@ ExtImportPrefs::ExtImportPrefs(wxWindow * parent, wxWindowID winid)
 
 ExtImportPrefs::~ExtImportPrefs()
 {
+}
+
+ComponentInterfaceSymbol ExtImportPrefs::GetSymbol()
+{
+   return EXT_IMPORT_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString ExtImportPrefs::GetDescription()
+{
+   return _("Preferences for ExtImport");
+}
+
+wxString ExtImportPrefs::HelpPageName()
+{
+   return "Extended_Import_Preferences";
 }
 
 /// Creates the dialog and its contents.
@@ -674,11 +690,6 @@ void ExtImportPrefs::OnRuleTableCellClick (wxGridEvent& event)
    event.Skip();
 }
 
-wxString ExtImportPrefs::HelpPageName()
-{
-   return "Extended_Import_Preferences";
-}
-
 ExtImportPrefsDropTarget::ExtImportPrefsDropTarget(wxDataObject *dataObject)
    : wxDropTarget(dataObject)
 {
@@ -811,8 +822,9 @@ void ExtImportPrefsDropTarget::OnLeave()
 {
 }
 
-PrefsPanel *ExtImportPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+ExtImportPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew ExtImportPrefs(parent, winid);
-}
+};

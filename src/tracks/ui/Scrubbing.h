@@ -13,12 +13,12 @@ Paul Licameli split from TrackPanel.cpp
 
 #include "../../Experimental.h"
 
-#include "../../MemoryX.h"
 #include <vector>
 #include <wx/longlong.h>
 
+#include "../../AudioIOBase.h" // for ScrubbingOptions
+#include "../../ClientData.h"
 #include "../../widgets/Overlay.h" // to inherit
-#include "../../commands/CommandFunctors.h"
 #include "../../commands/CommandContext.h"
 #include "../../commands/CommandManager.h" // for MenuTable
 #include "../../../include/audacity/Types.h"
@@ -35,42 +35,15 @@ extern AudacityProject *GetActiveProject();
 #define USE_SCRUB_THREAD
 #endif
 
-// For putting an increment of work in the scrubbing queue
-struct ScrubbingOptions {
-   ScrubbingOptions() {}
-
-   bool adjustStart {};
-
-   // usually from TrackList::GetEndTime()
-   double maxTime {};
-   double minTime {};
-
-   bool bySpeed {};
-   bool isPlayingAtSpeed{};
-
-   double delay {};
-
-   // Limiting values for the speed of a scrub interval:
-   double minSpeed { 0.0 };
-   double maxSpeed { 1.0 };
-
-
-   // When maximum speed scrubbing skips to follow the mouse,
-   // this is the minimum amount of playback allowed at the maximum speed:
-   double minStutterTime {};
-
-   static double MaxAllowedScrubSpeed()
-   { return 32.0; } // Is five octaves enough for your amusement?
-   static double MinAllowedScrubSpeed()
-   { return 0.01; } // Mixer needs a lower bound speed.  Scrub no slower than this.
-};
-
 // Scrub state object
-class Scrubber : public wxEvtHandler
+class Scrubber final
+   : public wxEvtHandler
+   , public ClientData::Base
 {
-public:
-   static constexpr unsigned ScrubPollInterval_ms = 50;
-   
+public:   
+   static Scrubber &Get( AudacityProject &project );
+   static const Scrubber &Get( const AudacityProject &project );
+
    Scrubber(AudacityProject *project);
    ~Scrubber();
 
@@ -192,6 +165,7 @@ private:
 #endif
 
    AudacityProject *mProject;
+   wxWindowRef mWindow;
 
    DECLARE_EVENT_TABLE()
 
@@ -212,12 +186,16 @@ private:
 };
 
 // Specialist in drawing the scrub speed, and listening for certain events
-class ScrubbingOverlay final : public wxEvtHandler, public Overlay
+class ScrubbingOverlay final
+   : public wxEvtHandler
+   , public Overlay
+   , public ClientData::Base
 {
 public:
    ScrubbingOverlay(AudacityProject *project);
 
 private:
+   unsigned SequenceNumber() const override;
    std::pair<wxRect, bool> DoGetRectangle(wxSize size) override;
    void Draw(OverlayPanel &panel, wxDC &dc) override;
 

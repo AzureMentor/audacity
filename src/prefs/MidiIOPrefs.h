@@ -26,11 +26,16 @@ class ShuttleGui;
 
 class wxArrayStringEx;
 
+#define MIDI_IO_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Midi IO") }
+
 class MidiIOPrefs final : public PrefsPanel
 {
  public:
    MidiIOPrefs(wxWindow * parent, wxWindowID winid);
    virtual ~MidiIOPrefs();
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    bool Commit() override;
    bool Validate() override;
    wxString HelpPageName() override;
@@ -63,12 +68,8 @@ class MidiIOPrefs final : public PrefsPanel
    DECLARE_EVENT_TABLE()
 };
 
-/// A PrefsPanelFactory that creates one MidiIOPrefs panel.
-class MidiIOPrefsFactory final : public PrefsPanelFactory
-{
-public:
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-};
+/// A PrefsPanel::Factory that creates one MidiIOPrefs panel.
+extern PrefsPanel::Factory MidiIOPrefsFactory;
 #endif
 
 #endif

@@ -81,16 +81,13 @@
 //        dialogs, widgets and other stuff.  This will need to be cleaned up.
 
 #include "../../FileNames.h"
-#include "../../Internat.h"
 #include "../../PlatformCompatibility.h"
 #include "../../ShuttleGui.h"
 #include "../../effects/Effect.h"
-#include "../../widgets/NumericTextCtrl.h"
-#include "../../widgets/wxPanelWrapper.h"
 #include "../../widgets/valnum.h"
-#include "../../widgets/ErrorDialog.h"
+#include "../../widgets/AudacityMessageBox.h"
+#include "../../widgets/NumericTextCtrl.h"
 #include "../../xml/XMLFileReader.h"
-#include "../../xml/XMLWriter.h"
 
 #if wxUSE_ACCESSIBILITY
 #include "../../widgets/WindowAccessible.h"
@@ -98,7 +95,6 @@
 
 #include "audacity/ConfigInterface.h"
 
-#include "../../MemoryX.h"
 #include <cstring>
 
 // Put this inclusion last.  On Linux it makes some unfortunate pollution of
@@ -370,9 +366,10 @@ void VSTEffectsModule::Terminate()
    return;
 }
 
-FileExtensions VSTEffectsModule::GetFileExtensions()
+const FileExtensions &VSTEffectsModule::GetFileExtensions()
 {
-   return {{ _T("vst") }};
+   static FileExtensions result{{ _T("vst") }};
+   return result;
 }
 
 FilePath VSTEffectsModule::InstallPath()
@@ -1359,6 +1356,11 @@ int VSTEffect::GetMidiOutCount()
 size_t VSTEffect::SetBlockSize(size_t maxBlockSize)
 {
    mBlockSize = std::min( maxBlockSize, mUserBlockSize );
+   return mBlockSize;
+}
+
+size_t VSTEffect::GetBlockSize() const
+{
    return mBlockSize;
 }
 
@@ -2909,7 +2911,7 @@ void VSTEffect::BuildPlain()
                wxALIGN_RIGHT | wxST_NO_AUTORESIZE);
             gridSizer->Add(mNames[i], 0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT | wxALL, 5);
 
-            mSliders[i] = safenew wxSlider(scroller,
+            mSliders[i] = safenew wxSliderWrapper(scroller,
                ID_Sliders + i,
                0,
                0,

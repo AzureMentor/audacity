@@ -16,10 +16,8 @@
 
 #include "../Experimental.h"
 
-#include "../MemoryX.h"
 #include <set>
 
-#include "../MemoryX.h"
 #include <wx/defs.h>
 
 class wxButton;
@@ -31,9 +29,7 @@ class wxWindow;
 #include "audacity/ConfigInterface.h"
 #include "audacity/EffectInterface.h"
 
-#include "../SampleFormat.h"
 #include "../SelectedRegion.h"
-#include "../Internat.h"
 
 #include "../Track.h"
 
@@ -55,6 +51,15 @@ class TrackList;
 class TrackFactory;
 class WaveTrack;
 
+/* i18n-hint: "Nyquist" is an embedded interpreted programming language in
+ Audacity, named in honor of the Swedish-American Harry Nyquist (or Nyqvist).
+ In the translations of this and other strings, you may transliterate the
+ name into another alphabet.  */
+#define NYQUISTEFFECTS_FAMILY ( EffectFamilySymbol{ XO("Nyquist") } )
+
+#define NYQUIST_PROMPT_ID wxT("Nyquist Prompt")
+#define NYQUIST_WORKER_ID wxT("Nyquist Worker")
+
 // TODO:  Apr-06-2015
 // TODO:  Much more cleanup of old methods and variables is needed, but
 // TODO:  can't be done until after all effects are using the NEW API.
@@ -75,6 +80,11 @@ class AUDACITY_DLL_API Effect /* not final */ : public wxEvtHandler,
    // Avoid allocating memory or doing time-consuming processing here.
    Effect();
    virtual ~Effect();
+
+   // Type of a registered function that, if it returns true,
+   // causes ShowInterface to return early without making any dialog
+   using VetoDialogHook = bool (*) ( wxDialog* );
+   static VetoDialogHook SetVetoDialogHook( VetoDialogHook hook );
 
    // ComponentInterface implementation
 
@@ -111,6 +121,7 @@ class AUDACITY_DLL_API Effect /* not final */ : public wxEvtHandler,
 
    void SetSampleRate(double rate) override;
    size_t SetBlockSize(size_t maxBlockSize) override;
+   size_t GetBlockSize() const override;
 
    bool IsReady() override;
    bool ProcessInitialize(sampleCount totalLen, ChannelNames chanMap = NULL) override;
@@ -250,15 +261,6 @@ class AUDACITY_DLL_API Effect /* not final */ : public wxEvtHandler,
                  bool shouldPrompt = true);
 
    bool Delegate( Effect &delegate, wxWindow *parent, bool shouldPrompt);
-
-   // Realtime Effect Processing
-   /* not virtual */ bool RealtimeAddProcessor(int group, unsigned chans, float rate);
-   /* not virtual */ size_t RealtimeProcess(int group,
-                               unsigned chans,
-                               float **inbuf,
-                               float **outbuf,
-                               size_t numSamples);
-   /* not virtual */ bool IsRealtimeActive();
 
    virtual bool IsHidden();
 
@@ -533,12 +535,6 @@ private:
    size_t mBlockSize;
    unsigned mNumChannels;
 
-   std::vector<int> mGroupProcessor;
-   int mCurrentProcessor;
-
-   wxCriticalSection mRealtimeSuspendLock;
-   int mRealtimeSuspendCount;
-
    const static wxString kUserPresetIdent;
    const static wxString kFactoryPresetIdent;
    const static wxString kCurrentSettingsIdent;
@@ -549,7 +545,6 @@ private:
    friend class EffectUIHost;
    friend class EffectPresetsDialog;
 };
-
 
 // FIXME:
 // FIXME:  Remove this once all effects are using the NEW dialog

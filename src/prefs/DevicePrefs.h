@@ -20,11 +20,16 @@ class wxChoice;
 class ShuttleGui;
 class wxArrayStringEx;
 
+#define DEVICE_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Device") }
+
 class DevicePrefs final : public PrefsPanel
 {
  public:
    DevicePrefs(wxWindow * parent, wxWindowID winid);
    virtual ~DevicePrefs();
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    bool Commit() override;
    wxString HelpPageName() override;
    void PopulateOrExchange(ShuttleGui & S) override;
@@ -52,11 +57,7 @@ class DevicePrefs final : public PrefsPanel
    DECLARE_EVENT_TABLE()
 };
 
-/// A PrefsPanelFactory that creates one DevicePrefs panel.
-class DevicePrefsFactory final : public PrefsPanelFactory
-{
-public:
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-};
+/// A PrefsPanel::Factory that creates one DevicePrefs panel.
+extern PrefsPanel::Factory DevicePrefsFactory;
 
 #endif

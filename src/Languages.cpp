@@ -32,14 +32,15 @@
 
 #include "Audacity.h"
 #include "Languages.h"
+#include "MemoryX.h"
+
+#include "audacity/Types.h"
 
 #include <wx/defs.h>
 #include <wx/intl.h>
 #include <wx/textfile.h>
 
 #include "FileNames.h"
-
-#include "AudacityApp.h"
 
 #include <unordered_map>
 
@@ -48,18 +49,18 @@ using LangHash = std::unordered_map<wxString, wxString>;
 static bool TranslationExists(const FilePaths &audacityPathList, wxString code)
 {
    FilePaths results;
-   wxGetApp().FindFilesInPathList(wxString::Format(wxT("%s/audacity.mo"),
+   FileNames::FindFilesInPathList(wxString::Format(wxT("%s/audacity.mo"),
                                                    code),
                                   audacityPathList,
                                   results);
 #if defined(__WXMAC__)
-   wxGetApp().FindFilesInPathList(wxString::Format(wxT("%s.lproj/audacity.mo"),
+   FileNames::FindFilesInPathList(wxString::Format(wxT("%s.lproj/audacity.mo"),
                                                    code),
                                   audacityPathList,
                                   results);
 #endif
 
-   wxGetApp().FindFilesInPathList(wxString::Format(wxT("%s/LC_MESSAGES/audacity.mo"),
+   FileNames::FindFilesInPathList(wxString::Format(wxT("%s/LC_MESSAGES/audacity.mo"),
                                                    code),
                                   audacityPathList,
                                   results);
@@ -201,12 +202,13 @@ void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
       localLanguageName[code] = name;
    }
 
-   auto audacityPathList = wxGetApp().audacityPathList;
+   auto audacityPathList = FileNames::AudacityPathList();
 
 #if defined(__WXGTK__)
-   wxGetApp().AddUniquePathToPathList(wxString::Format(wxT("%s/share/locale"),
-                                                       wxT(INSTALL_PREFIX)),
-                                      audacityPathList);
+   FileNames::AddUniquePathToPathList(
+      wxString::Format(wxT("%s/share/locale"),
+         wxT(INSTALL_PREFIX)),
+      audacityPathList);
 #endif
 
    // For each language in our list we look for a corresponding entry in

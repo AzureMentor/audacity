@@ -30,11 +30,16 @@ enum {
 };
 
 
+#define MODULE_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Module") }
+
 class ModulePrefs final : public PrefsPanel
 {
  public:
    ModulePrefs(wxWindow * parent, wxWindowID winid);
    ~ModulePrefs();
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    bool Commit() override;
    wxString HelpPageName() override;
    void PopulateOrExchange(ShuttleGui & S) override;
@@ -50,10 +55,6 @@ class ModulePrefs final : public PrefsPanel
    FilePaths mPaths;
 };
 
-/// A PrefsPanelFactory that creates one ModulePrefs panel.
-class ModulePrefsFactory final : public PrefsPanelFactory
-{
-public:
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-};
+/// A PrefsPanel::Factory that creates one ModulePrefs panel.
+extern PrefsPanel::Factory ModulePrefsFactory;
 #endif

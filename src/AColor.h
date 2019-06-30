@@ -14,11 +14,12 @@
 #ifndef __AUDACITY_COLOR__
 #define __AUDACITY_COLOR__
 
-#include "MemoryX.h"
+#include <memory>
 #include <wx/brush.h> // member variable
 #include <wx/pen.h> // member variable
 
 class wxDC;
+class wxGraphicsContext;
 class wxRect;
 
 /// Used to restore pen, brush and logical-op in a DC back to what they were.
@@ -79,6 +80,7 @@ class AColor {
    static wxColour Blend(const wxColour & c1, const wxColour & c2);
 
    static void UseThemeColour( wxDC * dc, int iBrush, int iPen=-1, int alpha = 255 );
+   static void UseThemeColour( wxGraphicsContext * gc, int iBrush, int iPen=-1, int alpha = 255 );
    static void TrackPanelBackground(wxDC * dc, bool selected);
 
    static void Light(wxDC * dc, bool selected, bool highlight = false);

@@ -15,17 +15,30 @@
 #define __AUDACITY_THEME_PREFS__
 
 #include <wx/defs.h>
+#include <wx/event.h> // to declare a custom event type
 
 #include "PrefsPanel.h"
 
 class ShuttleGui;
+
+// An event sent to the application when the user changes choice of theme
+wxDECLARE_EXPORTED_EVENT(AUDACITY_DLL_API,
+                         EVT_THEME_CHANGE, wxCommandEvent);
+
+#define THEME_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Theme") }
 
 class ThemePrefs final : public PrefsPanel
 {
  public:
    ThemePrefs(wxWindow * parent, wxWindowID winid);
    ~ThemePrefs(void);
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    bool Commit() override;
+   wxString HelpPageName() override;
+
+   static void ApplyUpdatedImages();
 
  private:
    void Populate();
@@ -40,10 +53,6 @@ class ThemePrefs final : public PrefsPanel
    DECLARE_EVENT_TABLE()
 };
 
-/// A PrefsPanelFactory that creates one ThemePrefs panel.
-class ThemePrefsFactory final : public PrefsPanelFactory
-{
-public:
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-};
+/// A PrefsPanel::Factory that creates one ThemePrefs panel.
+extern PrefsPanel::Factory ThemePrefsFactory;
 #endif

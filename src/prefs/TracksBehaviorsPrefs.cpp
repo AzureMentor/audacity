@@ -21,7 +21,6 @@
 
 #include "../Prefs.h"
 #include "../ShuttleGui.h"
-#include "../Internat.h"
 
 TracksBehaviorsPrefs::TracksBehaviorsPrefs(wxWindow * parent, wxWindowID winid)
 /* i18n-hint: two nouns */
@@ -32,6 +31,21 @@ TracksBehaviorsPrefs::TracksBehaviorsPrefs(wxWindow * parent, wxWindowID winid)
 
 TracksBehaviorsPrefs::~TracksBehaviorsPrefs()
 {
+}
+
+ComponentInterfaceSymbol TracksBehaviorsPrefs::GetSymbol()
+{
+   return TRACKS_BEHAVIORS_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString TracksBehaviorsPrefs::GetDescription()
+{
+   return _("Preferences for TracksBehaviors");
+}
+
+wxString TracksBehaviorsPrefs::HelpPageName()
+{
+   return "Tracks_Behaviors_Preferences";
 }
 
 const wxChar *TracksBehaviorsPrefs::ScrollingPreferenceKey()
@@ -82,7 +96,7 @@ void TracksBehaviorsPrefs::PopulateOrExchange(ShuttleGui & S)
                     false);
       S.TieCheckBox(_("&Type to create a label"),
                     wxT("/GUI/TypeToCreateLabel"),
-                    true);
+                    false);
       S.TieCheckBox(_("Use dialog for the &name of a new label"),
                     wxT("/GUI/DialogForNameNewLabel"),
                     false);
@@ -119,17 +133,9 @@ bool TracksBehaviorsPrefs::Commit()
    return true;
 }
 
-wxString TracksBehaviorsPrefs::HelpPageName()
-{
-   return "Tracks_Behaviors_Preferences";
-}
-
-TracksBehaviorsPrefsFactory::TracksBehaviorsPrefsFactory()
-{
-}
-
-PrefsPanel *TracksBehaviorsPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+TracksBehaviorsPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew TracksBehaviorsPrefs(parent, winid);
-}
+};

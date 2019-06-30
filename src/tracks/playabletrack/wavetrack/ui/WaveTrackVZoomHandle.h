@@ -13,20 +13,9 @@ Paul Licameli split from TrackPanel.cpp
 
 class wxMouseState;
 class WaveTrack;
-#include "../../../../MemoryX.h"
+#include "WaveTrackViewConstants.h"
 #include "../../../../UIHandle.h"
 
-
-// Note that these can be with or without spectrum view which
-// adds a constant.
-const int kZoom1to1 = 1;
-const int kZoomTimes2 = 2;
-const int kZoomDiv2 = 3;
-const int kZoomHalfWave = 4;
-const int kZoomInByDrag = 5;
-const int kZoomIn = 6;
-const int kZoomOut = 7;
-const int kZoomReset = 8;
 
 class WaveTrackVZoomHandle : public UIHandle
 {
@@ -41,7 +30,8 @@ public:
 
    static void DoZoom
    (AudacityProject *pProject,
-    WaveTrack *pTrack, bool allChannels, int ZoomKind,
+    WaveTrack *pTrack, bool allChannels,
+    WaveTrackViewConstants::ZoomActions ZoomKind,
     const wxRect &rect, int zoomStart, int zoomEnd,
     bool fixedMousePoint);
 
@@ -67,12 +57,16 @@ public:
 
    Result Cancel(AudacityProject *pProject) override;
 
-   void DrawExtras
-      (DrawingPass pass,
-       wxDC * dc, const wxRegion &updateRegion, const wxRect &panelRect)
-      override;
-
 private:
+
+   // TrackPanelDrawable implementation
+   void Draw(
+      TrackPanelDrawingContext &context,
+      const wxRect &rect, unsigned iPass ) override;
+
+   wxRect DrawingArea(
+      const wxRect &rect, const wxRect &panelRect, unsigned iPass ) override;
+
    std::weak_ptr<WaveTrack> mpTrack;
 
    int mZoomStart{}, mZoomEnd{};

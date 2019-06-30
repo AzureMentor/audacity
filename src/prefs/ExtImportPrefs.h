@@ -16,7 +16,6 @@
 
 #include "PrefsPanel.h"
 
-#include "../import/Import.h"
 #include "../import/ImportPlugin.h"
 
 class wxButton;
@@ -24,9 +23,12 @@ class wxGridEvent;
 class wxGridRangeSelectEvent;
 class wxListCtrl;
 class wxListEvent;
+class ExtImportItem;
 class ExtImportPrefs;
 class Grid;
 class ShuttleGui;
+
+#define EXT_IMPORT_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Ext Import") }
 
 class ExtImportPrefsDropTarget final : public wxDropTarget
 {
@@ -49,6 +51,9 @@ class ExtImportPrefs final : public PrefsPanel
  public:
    ExtImportPrefs(wxWindow * parent, wxWindowID winid);
    ~ExtImportPrefs();
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    bool Commit() override;
    wxString HelpPageName() override;
    void PopulateOrExchange(ShuttleGui & S) override;
@@ -109,10 +114,6 @@ class ExtImportPrefs final : public PrefsPanel
 };
 
 
-/// A PrefsPanelFactory that creates one ExtImportPrefs panel.
-class ExtImportPrefsFactory final : public PrefsPanelFactory
-{
-public:
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-};
+/// A PrefsPanel::Factory that creates one ExtImportPrefs panel.
+extern PrefsPanel::Factory ExtImportPrefsFactory;
 #endif

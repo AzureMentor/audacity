@@ -23,8 +23,6 @@
 #include "../Prefs.h"
 #include "../ShuttleGui.h"
 
-#include "../Internat.h"
-
 ImportExportPrefs::ImportExportPrefs(wxWindow * parent, wxWindowID winid)
 :   PrefsPanel(parent, winid, _("Import / Export"))
 {
@@ -33,6 +31,21 @@ ImportExportPrefs::ImportExportPrefs(wxWindow * parent, wxWindowID winid)
 
 ImportExportPrefs::~ImportExportPrefs()
 {
+}
+
+ComponentInterfaceSymbol ImportExportPrefs::GetSymbol()
+{
+   return IMPORT_EXPORT_PREFS_PLUGIN_SYMBOL;
+}
+
+wxString ImportExportPrefs::GetDescription()
+{
+   return _("Preferences for ImportExport");
+}
+
+wxString ImportExportPrefs::HelpPageName()
+{
+   return "Import_-_Export_Preferences";
 }
 
 /// Creates the dialog and its contents.
@@ -113,13 +126,9 @@ bool ImportExportPrefs::Commit()
    return true;
 }
 
-wxString ImportExportPrefs::HelpPageName()
-{
-   return "Import_-_Export_Preferences";
-}
-
-PrefsPanel *ImportExportPrefsFactory::operator () (wxWindow *parent, wxWindowID winid)
+PrefsPanel::Factory
+ImportExportPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 {
    wxASSERT(parent); // to justify safenew
    return safenew ImportExportPrefs(parent, winid);
-}
+};

@@ -25,7 +25,7 @@
 
 #include <wx/defs.h>
 
-#include "../WaveTrack.h"
+#include "../tracks/playabletrack/wavetrack/ui/WaveTrackViewConstants.h"
 
 #include "PrefsPanel.h"
 #include "SpectrogramSettings.h"
@@ -39,11 +39,16 @@ class ShuttleGui;
 class SpectrogramSettings;
 class WaveTrack;
 
+#define SPECTRUM_PREFS_PLUGIN_SYMBOL ComponentInterfaceSymbol{ XO("Spectrum") }
+
 class SpectrumPrefs final : public PrefsPanel
 {
  public:
    SpectrumPrefs(wxWindow * parent, wxWindowID winid, WaveTrack *wt);
    virtual ~SpectrumPrefs();
+   ComponentInterfaceSymbol GetSymbol() override;
+   wxString GetDescription() override;
+
    void Preview() override;
    bool Commit() override;
    void PopulateOrExchange(ShuttleGui & S) override;
@@ -93,21 +98,15 @@ class SpectrumPrefs final : public PrefsPanel
 
    SpectrogramSettings mTempSettings, mOrigSettings;
 
-   WaveTrack::WaveTrackDisplay mOrigDisplay;
+   WaveTrackViewConstants::Display mOrigDisplay;
    float mOrigMin, mOrigMax;
 
    bool mPopulating;
    bool mCommitted{};
 };
 
-/// A PrefsPanelFactory that creates one SpectrumPrefs panel.
-class SpectrumPrefsFactory final : public PrefsPanelFactory
-{
-public:
-   explicit SpectrumPrefsFactory(WaveTrack *wt = 0);
-   PrefsPanel *operator () (wxWindow *parent, wxWindowID winid) override;
-
-private:
-   WaveTrack *const mWt;
-};
+/// A PrefsPanel::Factory that creates one SpectrumPrefs panel.
+/// This factory can be parametrized by a single track, to change settings
+/// non-globally
+extern PrefsPanel::Factory SpectrumPrefsFactory( WaveTrack *wt = 0 );
 #endif

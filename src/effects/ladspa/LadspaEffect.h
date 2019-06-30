@@ -13,20 +13,20 @@ class wxStaticText;
 class wxTextCtrl;
 class wxCheckBox;
 
-#include "../../MemoryX.h"
+class NumericTextCtrl;
+
 #include <wx/dynlib.h> // member variable
+#include <wx/event.h> // to inherit
 
 #include "audacity/EffectInterface.h"
 #include "audacity/ModuleInterface.h"
 #include "audacity/PluginInterface.h"
 
-#include "../../widgets/NumericTextCtrl.h"
-
 #include "ladspa.h"
 #include "../../SampleFormat.h"
 
 #define LADSPAEFFECTS_VERSION wxT("1.0.0.0")
-/* i8n-hint: abbreviates "Linux Audio Developer's Simple Plugin API"
+/* i18n-hint: abbreviates "Linux Audio Developer's Simple Plugin API"
    (Application programming interface)
  */
 #define LADSPAEFFECTS_FAMILY XO("LADSPA")
@@ -77,6 +77,7 @@ public:
 
    void SetSampleRate(double rate) override;
    size_t SetBlockSize(size_t maxBlockSize) override;
+   size_t GetBlockSize() const override;
 
    sampleCount GetLatency() override;
    size_t GetTailSize() override;
@@ -222,7 +223,7 @@ public:
    bool Initialize() override;
    void Terminate() override;
 
-   FileExtensions GetFileExtensions() override;
+   const FileExtensions &GetFileExtensions() override;
    FilePath InstallPath() override;
 
    bool AutoRegisterPlugins(PluginManagerInterface & pm) override;
