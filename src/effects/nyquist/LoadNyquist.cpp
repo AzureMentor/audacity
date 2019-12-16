@@ -31,6 +31,7 @@ const static wxChar *kShippedEffects[] =
    wxT("highpass.ny"),
    wxT("limiter.ny"),
    wxT("lowpass.ny"),
+   wxT("noisegate.ny"),
    wxT("notch.ny"),
    wxT("nyquist-plug-in-installer.ny"),
    wxT("pluck.ny"),
@@ -46,7 +47,6 @@ const static wxChar *kShippedEffects[] =
    wxT("StudioFadeOut.ny"),
    wxT("tremolo.ny"),
    wxT("vocalrediso.ny"),
-   wxT("vocalremover.ny"),
    wxT("vocoder.ny"),
 };
 
@@ -155,6 +155,15 @@ void NyquistEffectsModule::Terminate()
    return;
 }
 
+EffectFamilySymbol NyquistEffectsModule::GetOptionalFamilySymbol()
+{
+#if USE_NYQUIST
+   return NYQUISTEFFECTS_FAMILY;
+#else
+   return {};
+#endif
+}
+
 const FileExtensions &NyquistEffectsModule::GetFileExtensions()
 {
    static FileExtensions result{{ _T("ny") }};
@@ -207,7 +216,7 @@ PluginPaths NyquistEffectsModule::FindPluginPaths(PluginManagerInterface & pm)
 
    // Add the Nyquist prompt
    files.push_back(NYQUIST_PROMPT_ID);
-   
+
    // Load .ny plug-ins
    pm.FindFilesInPathList(wxT("*.ny"), pathList, files);
    // LLL:  Works for all platform with NEW plugin support (dups are removed)

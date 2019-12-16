@@ -15,7 +15,6 @@
 
 #include <wx/filename.h>
 
-#include "../EffectManager.h"
 #include "VampEffect.h"
 
 #include <iostream>
@@ -110,6 +109,15 @@ void VampEffectsModule::Terminate()
 {
    // Nothing to do here
    return;
+}
+
+EffectFamilySymbol VampEffectsModule::GetOptionalFamilySymbol()
+{
+#if USE_VAMP
+   return VAMPEFFECTS_FAMILY;
+#else
+   return {};
+#endif
 }
 
 const FileExtensions &VampEffectsModule::GetFileExtensions()

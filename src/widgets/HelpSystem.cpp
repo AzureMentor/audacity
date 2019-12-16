@@ -8,6 +8,15 @@
   Leland Lucius
   Richard Ash
 
+  was merged with LinkingHtmlWindow.h
+
+  Vaughan Johnson
+  Dominic Mazzoni
+
+  utility fn and
+  descendant of HtmlWindow that opens links in the user's
+  default browser
+
 *//********************************************************************/
 
 #include "../Audacity.h" // for USE_* macros
@@ -32,12 +41,12 @@
 #include <wx/regex.h>
 
 #include "../FileNames.h"
-#include "LinkingHtmlWindow.h"
 #include "../AllThemeResources.h"
 #include "../ShuttleGui.h"
 #include "../HelpText.h"
 #include "../Prefs.h"
 #include "../wxFileNameWrapper.h"
+#include "../prefs/GUIPrefs.h"
 
 #ifdef USE_ALPHA_MANUAL
 const wxString HelpSystem::HelpHostname = wxT("alphamanual.audacityteam.org");
@@ -97,9 +106,9 @@ void HelpSystem::ShowInfoDialog( wxWindow *parent,
    S.StartVerticalLay(1);
    {
       S.AddTitle( shortMsg);
-      S.SetStyle( wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH | wxTE_RICH2 | 
-         wxTE_AUTO_URL | wxTE_NOHIDESEL | wxHSCROLL );
-      S.AddTextWindow(message);
+      S.Style( wxTE_MULTILINE | wxTE_READONLY | wxTE_RICH | wxTE_RICH2 |
+              wxTE_AUTO_URL | wxTE_NOHIDESEL | wxHSCROLL )
+         .AddTextWindow(message);
 
       S.SetBorder( 0 );
       S.StartHorizontalLay(wxALIGN_CENTER_HORIZONTAL, 0);
@@ -151,23 +160,28 @@ void HelpSystem::ShowHtmlText(wxWindow *pParent,
    pFrame->SetTransparent(0);
    ShuttleGui S( pWnd, eIsCreating );
 
-   S.SetStyle( wxNO_BORDER | wxTAB_TRAVERSAL );
-   wxPanel *pPan = S.Prop(true).StartPanel();
+   S.Style( wxNO_BORDER | wxTAB_TRAVERSAL )
+      .Prop(true)
+      .StartPanel();
    {
       S.StartHorizontalLay( wxEXPAND, false );
       {
-         wxButton * pWndBackwards = S.Id( wxID_BACKWARD ).AddButton( _("<") );
-         wxButton * pWndForwards  = S.Id( wxID_FORWARD  ).AddButton( _(">") );
-         pWndForwards->Enable( false );
-         pWndBackwards->Enable( false );
-         #if wxUSE_TOOLTIPS
-         pWndForwards->SetToolTip( _("Forwards" ));
-         pWndBackwards->SetToolTip( _("Backwards" ));
-         #endif
+         S.Id( wxID_BACKWARD )
+            .Disable()
+#if wxUSE_TOOLTIPS
+            .ToolTip( XO("Backwards" ) )
+#endif
+            .AddButton( _("<") );
+         S.Id( wxID_FORWARD  )
+            .Disable()
+#if wxUSE_TOOLTIPS
+            .ToolTip( XO("Forwards" ) )
+#endif
+            .AddButton( _(">") );
       }
       S.EndHorizontalLay();
 
-      html = safenew LinkingHtmlWindow(pPan, wxID_ANY,
+      html = safenew LinkingHtmlWindow(S.GetParent(), wxID_ANY,
                                    wxDefaultPosition,
                                    bIsFile ? wxSize(500, 400) : wxSize(480, 240),
                                    wxHW_SCROLLBAR_AUTO | wxSUNKEN_BORDER);
@@ -178,9 +192,10 @@ void HelpSystem::ShowHtmlText(wxWindow *pParent,
       else
          html->SetPage( HtmlText);
 
-      S.Prop(1).AddWindow( html, wxEXPAND );
+      S.Prop(1).Focus().Position( wxEXPAND )
+         .AddWindow( html );
 
-      S.Id( wxID_CANCEL ).AddButton( _("Close") )->SetDefault();
+      S.Id( wxID_CANCEL ).AddButton( _("Close"), wxALIGN_CENTER, true );
    }
    S.EndPanel();
 
@@ -214,7 +229,6 @@ void HelpSystem::ShowHtmlText(wxWindow *pParent,
    }
 
    html->SetRelatedStatusBar( 0 );
-   html->SetFocus();
 
    return;
 }
@@ -240,8 +254,8 @@ void HelpSystem::ShowHelp(wxWindow *parent,
       // these next lines are for legacy cfg files (pre 2.0) where we had different modes
       if( (HelpMode == wxT("Standard")) || (HelpMode == wxT("InBrowser")) )
       {
-         HelpMode = wxT("Local");
-         gPrefs->Write(wxT("/GUI/Help"), HelpMode);
+         HelpMode = GUIManualLocation.Default().Internal();
+         GUIManualLocation.Write(HelpMode);
          gPrefs->Flush();
       }
    }
@@ -275,7 +289,9 @@ void HelpSystem::ShowHelp(wxWindow *parent,
       // Use Built-in browser to suggest you use the remote url.
       wxString Text = HelpText( wxT("remotehelp") );
       Text.Replace( wxT("*URL*"), remoteURL );
-      ShowHtmlText( parent, _("Help on the Internet"), Text, false, bModal );
+      // Always make the 'help on the internet' dialog modal.
+      // Fixes Bug 1411.
+      ShowHtmlText( parent, _("Help on the Internet"), Text, false, true );
    }
    else if( HelpMode == wxT("Local") || alwaysDefaultBrowser)
    {
@@ -398,4 +414,165 @@ void HelpSystem::ShowHelp(wxWindow *parent,
       webHelpPage,
       bModal
       );
+}
+
+// For compilers that support precompilation, includes "wx/wx.h".
+#include <wx/wxprec.h>
+
+#include <wx/mimetype.h>
+#include <wx/filename.h>
+#include <wx/uri.h>
+
+BEGIN_EVENT_TABLE(BrowserDialog, wxDialogWrapper)
+   EVT_BUTTON(wxID_FORWARD,  BrowserDialog::OnForward)
+   EVT_BUTTON(wxID_BACKWARD, BrowserDialog::OnBackward)
+   EVT_BUTTON(wxID_CANCEL,   BrowserDialog::OnClose)
+   EVT_KEY_DOWN(BrowserDialog::OnKeyDown)
+END_EVENT_TABLE()
+
+
+BrowserDialog::BrowserDialog(wxWindow *pParent, const wxString &title)
+   : wxDialogWrapper{ pParent, ID, title, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER /*| wxMAXIMIZE_BOX */  }
+{
+   int width, height;
+   const int minWidth = 400;
+   const int minHeight = 250;
+
+   gPrefs->Read(wxT("/GUI/BrowserWidth"), &width, minWidth);
+   gPrefs->Read(wxT("/GUI/BrowserHeight"), &height, minHeight);
+
+   if (width < minWidth || width > wxSystemSettings::GetMetric(wxSYS_SCREEN_X))
+      width = minWidth;
+   if (height < minHeight || height > wxSystemSettings::GetMetric(wxSYS_SCREEN_Y))
+      height = minHeight;
+
+   SetMinSize(wxSize(minWidth, minHeight));
+   SetSize(wxDefaultPosition.x, wxDefaultPosition.y, width, height, wxSIZE_AUTO);
+}
+
+void BrowserDialog::OnForward(wxCommandEvent & WXUNUSED(event))
+{
+   mpHtml->HistoryForward();
+   UpdateButtons();
+}
+
+void BrowserDialog::OnBackward(wxCommandEvent & WXUNUSED(event))
+{
+   mpHtml->HistoryBack();
+   UpdateButtons();
+}
+
+void BrowserDialog::OnClose(wxCommandEvent & WXUNUSED(event))
+{
+   if (IsModal() && !mDismissed)
+   {
+      mDismissed = true;
+      EndModal(wxID_CANCEL);
+   }
+   auto parent = GetParent();
+
+   gPrefs->Write(wxT("/GUI/BrowserWidth"), GetSize().GetX());
+   gPrefs->Write(wxT("/GUI/BrowserHeight"), GetSize().GetY());
+   gPrefs->Flush();
+
+#ifdef __WXMAC__
+   auto grandparent = GetParent()->GetParent();
+#endif
+
+   parent->Destroy();
+
+#ifdef __WXMAC__
+   if(grandparent && grandparent->IsShown()) {
+      grandparent->Raise();
+   }
+#endif
+}
+
+void BrowserDialog::OnKeyDown(wxKeyEvent & event)
+{
+   bool bSkip = true;
+   if (event.GetKeyCode() == WXK_ESCAPE)
+   {
+      bSkip = false;
+      Close(false);
+   }
+   event.Skip(bSkip);
+}
+
+
+void BrowserDialog::UpdateButtons()
+{
+   wxWindow * pWnd;
+   if( (pWnd = FindWindowById( wxID_BACKWARD, this )) != NULL )
+   {
+      pWnd->Enable(mpHtml->HistoryCanBack());
+   }
+   if( (pWnd = FindWindowById( wxID_FORWARD, this )) != NULL )
+   {
+      pWnd->Enable(mpHtml->HistoryCanForward());
+   }
+}
+
+void OpenInDefaultBrowser(const wxHtmlLinkInfo& link)
+{
+   wxURI uri(link.GetHref());
+   wxLaunchDefaultBrowser(uri.BuildURI());
+}
+
+LinkingHtmlWindow::LinkingHtmlWindow(wxWindow *parent, wxWindowID id /*= -1*/,
+                                       const wxPoint& pos /*= wxDefaultPosition*/,
+                                       const wxSize& size /*= wxDefaultSize*/,
+                                       long style /*= wxHW_SCROLLBAR_AUTO*/) :
+   HtmlWindow(parent, id, pos, size, style)
+{
+}
+
+void LinkingHtmlWindow::OnLinkClicked(const wxHtmlLinkInfo& link)
+{
+   wxString href = link.GetHref();
+
+   if( href.StartsWith( wxT("innerlink:help:")))
+   {
+      HelpSystem::ShowHelp(this, href.Mid( 15 ), true );
+      return;
+   }
+   else if( href.StartsWith(wxT("innerlink:")) )
+   {
+      wxString FileName =
+         wxFileName( FileNames::HtmlHelpDir(), href.Mid( 10 ) + wxT(".htm") ).GetFullPath();
+      if( wxFileExists( FileName ) )
+      {
+         HelpSystem::ShowHelp(this, FileName, wxEmptyString, false);
+         return;
+      }
+      else
+      {
+         SetPage( HelpText( href.Mid( 10 )));
+         wxGetTopLevelParent(this)->SetLabel( TitleText( href.Mid( 10 )));
+      }
+   }
+   else if( href.StartsWith(wxT("mailto:")) || href.StartsWith(wxT("file:")) )
+   {
+      OpenInDefaultBrowser( link );
+      return;
+   }
+   else if( !href.StartsWith( wxT("http:"))  && !href.StartsWith( wxT("https:")) )
+   {
+      HtmlWindow::OnLinkClicked( link );
+   }
+   else
+   {
+      OpenInDefaultBrowser(link);
+      return;
+   }
+   wxFrame * pFrame = GetRelatedFrame();
+   if( !pFrame )
+      return;
+   wxWindow * pWnd = pFrame->FindWindow(BrowserDialog::ID);
+   if( !pWnd )
+      return;
+   BrowserDialog * pDlg = wxDynamicCast( pWnd , BrowserDialog );
+   if( !pDlg )
+      return;
+   pDlg->UpdateButtons();
 }

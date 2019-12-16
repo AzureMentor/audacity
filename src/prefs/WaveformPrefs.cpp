@@ -27,6 +27,8 @@ Paul Licameli
 #include "../TrackPanel.h"
 #include "../ShuttleGui.h"
 #include "../WaveTrack.h"
+#include "../tracks/playabletrack/wavetrack/ui/WaveTrackView.h"
+#include "../tracks/playabletrack/wavetrack/ui/WaveTrackViewConstants.h"
 
 WaveformPrefs::WaveformPrefs(wxWindow * parent, wxWindowID winid, WaveTrack *wt)
 /* i18n-hint: A waveform is a visual representation of vibration */
@@ -77,7 +79,7 @@ enum {
 void WaveformPrefs::Populate()
 {
    // Reuse the same choices and codes as for Interface prefs
-   GUIPrefs::GetRangeChoices(&mRangeChoices, &mRangeCodes);
+   GUIPrefs::GetRangeChoices(nullptr, &mRangeChoices, &mRangeCodes);
 
    //------------------------- Main section --------------------
    // Now construct the GUI itself.
@@ -106,12 +108,12 @@ void WaveformPrefs::PopulateOrExchange(ShuttleGui & S)
          S.StartTwoColumn();
          {
             mScaleChoice =
-               S.Id(ID_SCALE).TieChoice(_("S&cale") + wxString(wxT(":")),
+               S.Id(ID_SCALE).TieChoice(_("S&cale:"),
                   mTempSettings.scaleType,
                   WaveformSettings::GetScaleNames());
 
             mRangeChoice =
-               S.Id(ID_RANGE).TieChoice(_("Waveform dB &range") + wxString(wxT(":")),
+               S.Id(ID_RANGE).TieChoice(_("Waveform dB &range:"),
                mTempSettings.dBRange,
                mRangeChoices);
          }
@@ -184,7 +186,8 @@ bool WaveformPrefs::Commit()
 
    if (mWt && isOpenPage) {
       for (auto channel : TrackList::Channels(mWt))
-         channel->SetDisplay(WaveTrackViewConstants::Waveform);
+         WaveTrackView::Get( *channel )
+            .SetDisplay( WaveTrackViewConstants::Waveform );
    }
 
    if (isOpenPage) {

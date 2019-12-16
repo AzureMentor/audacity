@@ -16,12 +16,12 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../AudioIO.h"
 #include "../../Project.h"
 #include "../../ProjectAudioIO.h"
+#include "../../ProjectAudioManager.h"
 #include "../../ProjectWindow.h"
 #include "../../Track.h"
 #include "../../TrackPanel.h"
 #include "../../ViewInfo.h"
 #include "Scrubbing.h"
-#include "../../toolbars/ControlToolBar.h"
 #include "TrackView.h"
 
 #include <wx/dc.h>
@@ -55,10 +55,19 @@ unsigned PlayIndicatorOverlayBase::SequenceNumber() const
 
 std::pair<wxRect, bool> PlayIndicatorOverlayBase::DoGetRectangle(wxSize size)
 {
-   auto width = mIsMaster ? 1 : IndicatorMediumWidth;
+   wxCoord width = 1, xx = mLastIndicatorX;
+
+   if ( !mIsMaster ) {
+      auto &ruler = AdornedRulerPanel::Get( *mProject );
+      auto gAudioIO = AudioIO::Get();
+      bool rec = gAudioIO->IsCapturing();
+      auto pair = ruler.GetIndicatorBitmap( xx, !rec );
+      xx = pair.first.x;
+      width = pair.second.GetWidth();
+   }
 
    // May be excessive height, but little matter
-   wxRect rect(mLastIndicatorX - width / 2, 0, width, size.GetHeight());
+   wxRect rect( xx, 0, width, size.GetHeight());
    return {
       rect,
       (mLastIndicatorX != mNewIndicatorX
@@ -113,7 +122,8 @@ void PlayIndicatorOverlayBase::Draw(OverlayPanel &panel, wxDC &dc)
    else if(auto ruler = dynamic_cast<AdornedRulerPanel*>(&panel)) {
       wxASSERT(!mIsMaster);
 
-      ruler->DoDrawIndicator(&dc, mLastIndicatorX, !rec, IndicatorMediumWidth, false, false);
+      auto pair = ruler->GetIndicatorBitmap( mLastIndicatorX, !rec );
+      dc.DrawBitmap( pair.second, pair.first.x, pair.first.y );
    }
    else
       wxASSERT(false);
@@ -181,9 +191,6 @@ void PlayIndicatorOverlay::OnTimer(wxCommandEvent &event)
          playPos,
          viewInfo.GetScreenEndTime() + tolerance);
 
-      // This displays the audio time, too...
-      window.TP_DisplaySelection();
-
       auto gAudioIO = AudioIO::Get();
 
       // BG: Scroll screen if option is set
@@ -191,7 +198,7 @@ void PlayIndicatorOverlay::OnTimer(wxCommandEvent &event)
           playPos >= 0 && !onScreen ) {
          // msmeyer: But only if not playing looped or in one-second mode
          // PRL: and not scrolling with play/record head fixed
-         auto mode = ControlToolBar::Get( *mProject ).GetLastPlayMode();
+         auto mode = ProjectAudioManager::Get( *mProject ).GetLastPlayMode();
          if (!pinned &&
              mode != PlayMode::loopedPlay &&
              mode != PlayMode::oneSecondPlay &&

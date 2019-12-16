@@ -439,7 +439,6 @@ private:
    void OnDisable(wxCommandEvent & evt);
 
 private:
-   ModuleInterface *mMod;
    EffectType mType;
    int mFilter;
 
@@ -529,53 +528,62 @@ void PluginRegistrationDialog::PopulateOrExchange(ShuttleGui &S)
 
             S.StartHorizontalLay(wxALIGN_NOT | wxALIGN_LEFT, 0);
             {
-               wxRadioButton* rb;
+               wxRadioButton *rb;
+
                /* i18n-hint: This is before radio buttons selecting which effects to show */
                S.AddPrompt(_("Show:"));
-               /* i18n-hint: Radio button to show all effects */
-               rb = S.Id(ID_ShowAll).AddRadioButton(_("&All"));
+               rb = S.Id(ID_ShowAll)
+                  /* i18n-hint: Radio button to show all effects */
+                  .Name(XO("Show all"))
+                  /* i18n-hint: Radio button to show all effects */
+                  .AddRadioButton(_("&All"));
 #if wxUSE_ACCESSIBILITY
                // so that name can be set on a standard control
                rb->SetAccessible(safenew WindowAccessible(rb));
 #endif
-               rb->SetName(_("Show all"));
-               /* i18n-hint: Radio button to show just the currently disabled effects */
-               rb = S.Id(ID_ShowDisabled).AddRadioButtonToGroup(_("D&isabled"));
+
+               rb = S.Id(ID_ShowDisabled)
+                  /* i18n-hint: Radio button to show just the currently disabled effects */
+                  .Name(XO("Show disabled"))
+                  /* i18n-hint: Radio button to show just the currently disabled effects */
+                  .AddRadioButtonToGroup(_("D&isabled"));
 #if wxUSE_ACCESSIBILITY
                // so that name can be set on a standard control
                rb->SetAccessible(safenew WindowAccessible(rb));
 #endif
-               rb->SetName(_("Show disabled"));
-               /* i18n-hint: Radio button to show just the currently enabled effects */
-               rb = S.Id(ID_ShowEnabled).AddRadioButtonToGroup(_("E&nabled"));
+
+               rb = S.Id(ID_ShowEnabled)
+                  /* i18n-hint: Radio button to show just the currently enabled effects */
+                  .Name(XO("Show enabled"))
+                  /* i18n-hint: Radio button to show just the currently enabled effects */
+                  .AddRadioButtonToGroup(_("E&nabled"));
 #if wxUSE_ACCESSIBILITY
                // so that name can be set on a standard control
                rb->SetAccessible(safenew WindowAccessible(rb));
 #endif
-               rb->SetName(_("Show enabled"));
-               /* i18n-hint: Radio button to show just the newly discovered effects */
-               rb = S.Id(ID_ShowNew).AddRadioButtonToGroup(_("Ne&w"));
+
+               rb = S.Id(ID_ShowNew)
+                  /* i18n-hint: Radio button to show just the newly discovered effects */
+                  .Name(XO("Show new"))
+                  /* i18n-hint: Radio button to show just the newly discovered effects */
+                  .AddRadioButtonToGroup(_("Ne&w"));
 #if wxUSE_ACCESSIBILITY
                // so that name can be set on a standard control
                rb->SetAccessible(safenew WindowAccessible(rb));
 #endif
-               rb->SetName(_("Show new"));
             }
             S.EndHorizontalLay();
          }
          S.EndHorizontalLay();
 
-         S.SetStyle(wxSUNKEN_BORDER | wxLC_REPORT | wxLC_HRULES | wxLC_VRULES );
-         mEffects = S.Id(ID_List).AddListControlReportMode();
-         mEffects->Bind(wxEVT_KEY_DOWN,
-                           &PluginRegistrationDialog::OnListChar,
-                           this);
+         mEffects = S.Id(ID_List)
+            .Style(wxSUNKEN_BORDER | wxLC_REPORT | wxLC_HRULES | wxLC_VRULES )
+            .ConnectRoot(wxEVT_KEY_DOWN,
+                      &PluginRegistrationDialog::OnListChar)
+            .AddListControlReportMode({ _("Name"), _("State"), _("Path") });
 #if wxUSE_ACCESSIBILITY
          mEffects->SetAccessible(mAx = safenew CheckListAx(mEffects));
 #endif
-         mEffects->InsertColumn(COL_Name, _("Name"));
-         mEffects->InsertColumn(COL_State, _("State"));
-         mEffects->InsertColumn(COL_Path, _("Path"));
 
          S.StartHorizontalLay(wxALIGN_LEFT | wxEXPAND, 0);
          {
@@ -672,7 +680,8 @@ void PluginRegistrationDialog::PopulateOrExchange(ShuttleGui &S)
 
    // Keep dialog from getting too wide
    int w = r.GetWidth() - (GetClientSize().GetWidth() - mEffects->GetSize().GetWidth());
-   mEffects->SetSizeHints(wxSize(wxMin(maxW, w), 200), wxSize(w, -1));
+   mEffects->SetMinSize({ std::min(maxW, w), 200 });
+   mEffects->SetMaxSize({ w, -1 });
 
    RegenerateEffectsList(ID_ShowAll);
 
@@ -973,15 +982,14 @@ void PluginRegistrationDialog::OnOK(wxCommandEvent & WXUNUSED(evt))
                     mLongestPath + wxT("\n") +
                     mLongestPath + wxT("\n");
 
-   wxString msg;
-
-   msg.Printf(_("Enabling effects or commands:\n\n%s"), last3);
+   auto msg = XO("Enabling effects or commands:\n\n%s").Format( last3 );
 
    // Make sure the progress dialog is deleted before we call EndModal() or
    // we will leave the project window in an unusable state on OSX.
    // See bug #1192.
    {
-      ProgressDialog progress(GetTitle(), msg, pdlgHideStopButton);
+      ProgressDialog progress(
+         TranslatableString{ GetTitle() }, msg, pdlgHideStopButton);
       progress.CenterOnParent();
 
       int i = 0;
@@ -993,7 +1001,8 @@ void PluginRegistrationDialog::OnOK(wxCommandEvent & WXUNUSED(evt))
          if (item.state == STATE_Enabled && item.plugs[0]->GetPluginType() == PluginTypeStub)
          {
             last3 = last3.AfterFirst(wxT('\n')) + item.path + wxT("\n");
-            auto status = progress.Update(++i, enableCount, wxString::Format(_("Enabling effect or command:\n\n%s"), last3));
+            auto status = progress.Update(++i, enableCount,
+               XO("Enabling effect or command:\n\n%s").Format( last3 ));
             if (status == ProgressResult::Cancelled)
             {
                break;
@@ -1304,16 +1313,6 @@ void PluginDescriptor::SetImporterIdentifier(const wxString & identifier)
    mImporterIdentifier = identifier;
 }
 
-const wxString & PluginDescriptor::GetImporterFilterDescription() const
-{
-   return mImporterFilterDesc;
-}
-
-void PluginDescriptor::SetImporterFilterDescription(const wxString & filterDesc)
-{
-   mImporterFilterDesc = filterDesc;
-}
-
 const FileExtensions & PluginDescriptor::GetImporterExtensions()
    const
 {
@@ -1365,7 +1364,7 @@ void PluginDescriptor::SetImporterExtensions( FileExtensions extensions )
 #define KEY_EFFECTTYPE_TOOL            wxT("Tool")
 #define KEY_EFFECTTYPE_HIDDEN          wxT("Hidden")
 #define KEY_IMPORTERIDENT              wxT("ImporterIdent")
-#define KEY_IMPORTERFILTER             wxT("ImporterFilter")
+//#define KEY_IMPORTERFILTER             wxT("ImporterFilter")
 #define KEY_IMPORTEREXTENSIONS         wxT("ImporterExtensions")
 
 // ============================================================================
@@ -1397,6 +1396,36 @@ const PluginID &PluginManagerInterface::AudacityCommandRegistrationCallback(
    return empty;
 }
 
+RegistryPath PluginManager::GetPluginEnabledSetting( const PluginID &ID )
+{
+   auto pPlugin = GetPlugin( ID );
+   if ( pPlugin )
+      return GetPluginEnabledSetting( *pPlugin );
+   return {};
+}
+
+RegistryPath PluginManager::GetPluginEnabledSetting(
+   const PluginDescriptor &desc )
+{
+   switch ( desc.GetPluginType() ) {
+      case PluginTypeModule: {
+         // Retrieve optional family symbol that was recorded in
+         // RegisterPlugin() for the module
+         auto family = desc.GetEffectFamily();
+         if ( family.empty() ) // as for built-in effect and command modules
+            return {};
+         else
+            return wxT('/') + family + wxT("/Enable");
+      }
+      case PluginTypeEffect:
+         // do NOT use GetEffectFamily() for this descriptor, but instead,
+         // delegate to the plugin descriptor of the provider, which may
+         // be different (may be empty)
+         return GetPluginEnabledSetting( desc.GetProviderID() );
+      default:
+         return {};
+   }
+}
 
 bool PluginManager::IsPluginRegistered(const PluginPath &path)
 {
@@ -1414,6 +1443,7 @@ bool PluginManager::IsPluginRegistered(const PluginPath &path)
 const PluginID & PluginManager::RegisterPlugin(ModuleInterface *module)
 {
    PluginDescriptor & plug = CreatePlugin(GetID(module), module, PluginTypeModule);
+   plug.SetEffectFamily(module->GetOptionalFamilySymbol().Internal());
 
    plug.SetEnabled(true);
    plug.SetValid(true);
@@ -1459,7 +1489,6 @@ const PluginID & PluginManager::RegisterPlugin(ModuleInterface *provider, Import
    plug.SetProviderID(PluginManager::GetID(provider));
 
    plug.SetImporterIdentifier(importer->GetPluginStringID());
-   plug.SetImporterFilterDescription(importer->GetPluginFormatDescription());
    plug.SetImporterExtensions(importer->GetSupportedExtensions());
 
    return plug.GetID();
@@ -1859,7 +1888,11 @@ bool PluginManager::DropFile(const wxString &fileName)
 
             // Ask whether to enable the plug-ins
             if (auto nIds = ids.size()) {
-               auto message = wxPLURAL( "Enable this plug-in?", "Enable these plug-ins?", nIds );
+               auto message = wxPLURAL(
+                  "Enable this plug-in?",
+                  "Enable these plug-ins?",
+                  0
+               )( nIds ).Translation();
                message += wxT("\n");
                for (const auto &name : names)
                   message += name + wxT("\n");
@@ -2182,13 +2215,6 @@ void PluginManager::LoadGroup(wxFileConfig *pRegistry, PluginType type)
             }
             plug.SetImporterIdentifier(strVal);
 
-            // Get the importer filter description and bypass group if not found
-            if (!pRegistry->Read(KEY_IMPORTERFILTER, &strVal))
-            {
-               continue;
-            }
-            plug.SetImporterFilterDescription(strVal);
-
             // Get the importer extensions and bypass group if not found
             if (!pRegistry->Read(KEY_IMPORTEREXTENSIONS, &strVal))
             {
@@ -2278,7 +2304,7 @@ void PluginManager::SaveGroup(wxFileConfig *pRegistry, PluginType type)
 
       // PRL:  Writing KEY_NAME which is no longer read, but older Audacity
       // versions expect to find it.
-      pRegistry->Write(KEY_NAME, plug.GetSymbol().Msgid());
+      pRegistry->Write(KEY_NAME, plug.GetSymbol().Msgid().MSGID());
 
       pRegistry->Write(KEY_VERSION, plug.GetUntranslatedVersion());
       pRegistry->Write(KEY_VENDOR, plug.GetVendor());
@@ -2322,7 +2348,6 @@ void PluginManager::SaveGroup(wxFileConfig *pRegistry, PluginType type)
          case PluginTypeImporter:
          {
             pRegistry->Write(KEY_IMPORTERIDENT, plug.GetImporterIdentifier());
-            pRegistry->Write(KEY_IMPORTERFILTER, plug.GetImporterFilterDescription());
             const auto & extensions = plug.GetImporterExtensions();
             wxString strExt;
             for (size_t i = 0, cnt = extensions.size(); i < cnt; i++)
@@ -2510,9 +2535,13 @@ const PluginDescriptor *PluginManager::GetFirstPlugin(int type)
       if( plug.IsValid() && plug.IsEnabled() &&  ((plugType & type) != 0))
       {
          bool familyEnabled = true;
-         if( (plugType & PluginTypeEffect) != 0)
+         if( (plugType & PluginTypeEffect) != 0) {
             // This preference may be written by EffectsPrefs
-            gPrefs->Read(plug.GetEffectFamily() + wxT("/Enable"), &familyEnabled, true);
+            auto setting = GetPluginEnabledSetting( plug );
+            familyEnabled = setting.empty()
+               ? true
+               : gPrefs->Read( setting, true );
+         }
          if (familyEnabled)
             return &mPluginsIter->second;
       }
@@ -2530,9 +2559,13 @@ const PluginDescriptor *PluginManager::GetNextPlugin(int type)
       if( plug.IsValid() && plug.IsEnabled() &&  ((plugType & type) != 0))
       {
          bool familyEnabled = true;
-         if( (plugType & PluginTypeEffect) != 0)
+         if( (plugType & PluginTypeEffect) != 0) {
             // This preference may be written by EffectsPrefs
-            gPrefs->Read(plug.GetEffectFamily() + wxT("/Enable"), &familyEnabled, true);
+            auto setting = GetPluginEnabledSetting( plug );
+            familyEnabled = setting.empty()
+               ? true
+               : gPrefs->Read( setting, true );
+         }
          if (familyEnabled)
             return &mPluginsIter->second;
       }
@@ -2549,7 +2582,10 @@ const PluginDescriptor *PluginManager::GetFirstPluginForEffectType(EffectType ty
 
       bool familyEnabled;
       // This preference may be written by EffectsPrefs
-      gPrefs->Read(plug.GetEffectFamily() + wxT("/Enable"), &familyEnabled, true);
+      auto setting = GetPluginEnabledSetting( plug );
+      familyEnabled = setting.empty()
+         ? true
+         : gPrefs->Read( setting, true );
       if (plug.IsValid() && plug.IsEnabled() && plug.GetEffectType() == type && familyEnabled)
       {
          return &plug;
@@ -2566,7 +2602,10 @@ const PluginDescriptor *PluginManager::GetNextPluginForEffectType(EffectType typ
       PluginDescriptor & plug = mPluginsIter->second;
       bool familyEnabled;
       // This preference may be written by EffectsPrefs
-      gPrefs->Read(plug.GetEffectFamily() + wxT("/Enable"), &familyEnabled, true);
+      auto setting = GetPluginEnabledSetting( plug );
+      familyEnabled = setting.empty()
+         ? true
+         : gPrefs->Read( setting, true );
       if (plug.IsValid() && plug.IsEnabled() && plug.GetEffectType() == type && familyEnabled)
       {
          return &plug;
@@ -3175,7 +3214,12 @@ int PluginManager::b64decode(const wxString &in, void *out)
 
 // These are defined out-of-line here, to keep ComponentInterface free of other
 // #include directives.
-const wxString& ComponentInterface::GetTranslatedName()
+const wxString ComponentInterface::GetTranslatedName()
 {
    return GetSymbol().Translation();
+}
+
+const TranslatableString ComponentInterface::GetUntranslatedName()
+{
+   return GetSymbol().Msgid();
 }

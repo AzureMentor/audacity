@@ -1427,20 +1427,21 @@ struct ControlInfo {
 
    void CreateControls(int id, ShuttleGui &S) const
    {
-      FloatingPointValidator<double> vld2(2);// precision.
-      if (formatAsInt)
-         vld2.SetPrecision( 0 );
-      vld2.SetRange( valueMin, valueMax );
-      wxTextCtrl *const text =
-         S.Id(id + 1).AddTextBox(textBoxCaption(), wxT(""), 0);
-      S.SetStyle(wxSL_HORIZONTAL);
-      text->SetValidator(vld2);
+      wxTextCtrl *const text = S.Id(id + 1)
+         .Validator<FloatingPointValidator<double>>(
+            formatAsInt ? 0 : 2,
+            nullptr,
+            NumValidatorStyle::DEFAULT,
+            valueMin, valueMax
+         )
+         .AddTextBox(textBoxCaption.Translation(), wxT(""), 0);
 
       wxSlider *const slider =
-         S.Id(id).AddSlider( {}, 0, sliderMax);
-      slider->SetName(sliderName());
-      slider->SetRange(0, sliderMax);
-      slider->SetSizeHints(150, -1);
+         S.Id(id)
+            .Name( sliderName )
+            .Style(wxSL_HORIZONTAL)
+            .MinSize( { 150, -1 } )
+            .AddSlider( {}, 0, sliderMax);
    }
 
    MemberPointer field;
@@ -1450,13 +1451,13 @@ struct ControlInfo {
    // (valueMin - valueMax) / sliderMax is the value increment of the slider
    const wxChar* format;
    bool formatAsInt;
-   const wxString textBoxCaption_;  wxString textBoxCaption() const { return wxGetTranslation(textBoxCaption_); }
-   const wxString sliderName_;  wxString sliderName() const { return wxGetTranslation(sliderName_); }
+   const TranslatableString textBoxCaption;
+   const TranslatableString sliderName;
 
    ControlInfo(MemberPointer f, double vMin, double vMax, long sMax, const wxChar* fmt, bool fAsInt,
-      const wxString &caption, const wxString &name)
+      const TranslatableString &caption, const TranslatableString &name)
       : field(f), valueMin(vMin), valueMax(vMax), sliderMax(sMax), format(fmt), formatAsInt(fAsInt)
-      , textBoxCaption_(caption), sliderName_(name)
+      , textBoxCaption(caption), sliderName(name)
    {
    }
 };
@@ -1751,62 +1752,59 @@ void EffectNoiseReduction::Dialog::PopulateOrExchange(ShuttleGui & S)
    {
       S.StartMultiColumn(2);
       {
-         {
-            wxArrayStringEx windowTypeChoices;
-            for (int ii = 0; ii < WT_N_WINDOW_TYPES; ++ii)
-               windowTypeChoices.push_back(windowTypesInfo[ii].name);
-            S.TieChoice(_("&Window types") + wxString(wxT(":")),
-               mTempSettings.mWindowTypes,
-               windowTypeChoices);
-         }
+         S.TieChoice(_("&Window types:"),
+            mTempSettings.mWindowTypes,
+            []{
+               wxArrayStringEx windowTypeChoices;
+               for (int ii = 0; ii < WT_N_WINDOW_TYPES; ++ii)
+                  windowTypeChoices.push_back(windowTypesInfo[ii].name);
+               return windowTypeChoices;
+            }()
+         );
 
-         {
-            S.TieChoice(_("Window si&ze") + wxString(wxT(":")),
-               mTempSettings.mWindowSizeChoice,
-               {
-                  _("8") ,
-                  _("16") ,
-                  _("32") ,
-                  _("64") ,
-                  _("128") ,
-                  _("256") ,
-                  _("512") ,
-                  _("1024") ,
-                  _("2048 (default)") ,
-                  _("4096") ,
-                  _("8192") ,
-                  _("16384") ,
-               }
-            );
-         }
+         S.TieChoice(_("Window si&ze:")),
+            mTempSettings.mWindowSizeChoice,
+            {
+               _("8") ,
+               _("16") ,
+               _("32") ,
+               _("64") ,
+               _("128") ,
+               _("256") ,
+               _("512") ,
+               _("1024") ,
+               _("2048 (default)") ,
+               _("4096") ,
+               _("8192") ,
+               _("16384") ,
+            }
+         );
 
-         {
-            S.TieChoice(_("S&teps per window") + wxString(wxT(":")),
-               mTempSettings.mStepsPerWindowChoice,
-               {
-                  _("2") ,
-                  _("4 (default)") ,
-                  _("8") ,
-                  _("16") ,
-                  _("32") ,
-                  _("64") ,
-               }
-            );
-         }
+         S.TieChoice(_("S&teps per window:"),
+            mTempSettings.mStepsPerWindowChoice,
+            {
+               _("2") ,
+               _("4 (default)") ,
+               _("8") ,
+               _("16") ,
+               _("32") ,
+               _("64") ,
+            }
+         );
 
-         S.Id(ID_CHOICE_METHOD);
-         {
-            wxArrayStringEx methodChoices;
-            int nn = DM_N_METHODS;
+         S.Id(ID_CHOICE_METHOD)
+         .TieChoice(_("Discrimination &method:"),
+            mTempSettings.mMethod,
+            []{
+               wxArrayStringEx methodChoices;
+               int nn = DM_N_METHODS;
 #ifndef OLD_METHOD_AVAILABLE
-            --nn;
+               --nn;
 #endif
-            for (int ii = 0; ii < nn; ++ii)
-               methodChoices.push_back(discriminationMethodInfo[ii].name);
-            S.TieChoice(_("Discrimination &method") + wxString(wxT(":")),
-               mTempSettings.mMethod,
-               methodChoices);
-         }
+               for (int ii = 0; ii < nn; ++ii)
+                  methodChoices.push_back(discriminationMethodInfo[ii].name);
+               return methodChoices;
+            }());
       }
       S.EndMultiColumn();
 

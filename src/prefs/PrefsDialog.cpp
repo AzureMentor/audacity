@@ -34,6 +34,7 @@
 #include <wx/listbook.h>
 
 #include <wx/treebook.h>
+#include <wx/treectrl.h>
 
 #include "../AudioIOBase.h"
 #include "../Prefs.h"
@@ -505,7 +506,10 @@ PrefsDialog::Factories
       PrefsNode(ImportExportPrefsFactory, 1),
       ExtImportPrefsFactory,
 
+#ifdef EXPERIMENTAL_OD_DATA
       ProjectsPrefsFactory,
+#endif
+
 #if !defined(DISABLE_DYNAMIC_LOADING_FFMPEG) || !defined(DISABLE_DYNAMIC_LOADING_LAME)
       LibraryPrefsFactory,
 #endif
@@ -547,7 +551,7 @@ PrefsDialog::PrefsDialog
    {
       wxASSERT(factories.size() > 0);
       if (!uniquePage) {
-         mCategories = safenew wxTreebookExt(this, wxID_ANY, mTitlePrefix);
+         mCategories = safenew wxTreebookExt(S.GetParent(), wxID_ANY, mTitlePrefix);
 #if wxUSE_ACCESSIBILITY
          // so that name can be set on a standard control
          mCategories->GetTreeCtrl()->SetAccessible(
@@ -557,8 +561,9 @@ PrefsDialog::PrefsDialog
          mCategories->GetTreeCtrl()->SetName(_("Category"));
          S.StartHorizontalLay(wxALIGN_LEFT | wxEXPAND, true);
          {
-            S.Prop(1);
-            S.AddWindow(mCategories, wxEXPAND);
+            S.Prop(1)
+               .Position(wxEXPAND)
+               .AddWindow(mCategories);
 
             {
                typedef std::pair<int, int> IntPair;
@@ -597,8 +602,10 @@ PrefsDialog::PrefsDialog
          // Unique page, don't show the factory
          const PrefsNode &node = factories[0];
          const PrefsPanel::Factory &factory = node.factory;
-         mUniquePage = factory(this, wxID_ANY);
-         wxWindow * uniquePageWindow = S.Prop(1).AddWindow(mUniquePage, wxEXPAND);
+         mUniquePage = factory(S.GetParent(), wxID_ANY);
+         wxWindow * uniquePageWindow = S.Prop(1)
+            .Position(wxEXPAND)
+            .AddWindow(mUniquePage);
          // We're not in the wxTreebook, so add the accelerator here
          wxAcceleratorEntry entries[1];
 #if defined(__WXMAC__)
@@ -613,7 +620,6 @@ PrefsDialog::PrefsDialog
    S.EndVerticalLay();
 
    S.AddStandardButtons(eOkButton | eCancelButton | ePreviewButton | eHelpButton);
-   static_cast<wxButton*>(wxWindow::FindWindowById(wxID_OK, this))->SetDefault();
 
    if (mUniquePage && !mUniquePage->ShowsPreviewButton()) {
       wxWindow *const previewButton =
@@ -626,7 +632,7 @@ PrefsDialog::PrefsDialog
       mCategories->GetTreeCtrl()->EnsureVisible(mCategories->GetTreeCtrl()->GetRootItem());
 #endif
 
-//   mCategories->SetSizeHints(-1, -1, 790, 600);  // 790 = 800 - (border * 2)
+//   mCategories->SetMaxSize({ 790, 600 });  // 790 = 800 - (border * 2)
    Layout();
    Fit();
    wxSize sz = GetSize();

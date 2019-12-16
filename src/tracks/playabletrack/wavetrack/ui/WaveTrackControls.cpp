@@ -16,15 +16,16 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../ui/PlayableTrackButtonHandles.h"
 #include "WaveTrackSliderHandles.h"
 
-#include "../../../ui/TrackView.h"
+#include "WaveTrackView.h"
 #include "../../../../AudioIOBase.h"
+#include "../../../../CellularPanel.h"
 #include "../../../../Menus.h"
 #include "../../../../Project.h"
 #include "../../../../ProjectAudioIO.h"
 #include "../../../../ProjectHistory.h"
 #include "../../../../RefreshCode.h"
 #include "../../../../ShuttleGui.h"
-#include "../../../../TrackPanel.h"
+#include "../../../../TrackPanelAx.h"
 #include "../../../../TrackPanelMouseEvent.h"
 #include "../../../../WaveTrack.h"
 #include "../../../../widgets/PopupMenuTable.h"
@@ -33,11 +34,9 @@ Paul Licameli split from TrackPanel.cpp
 #include "../../../../prefs/PrefsDialog.h"
 #include "../../../../prefs/SpectrumPrefs.h"
 #include "../../../../prefs/ThemePrefs.h"
-#include "../../../../prefs/TracksBehaviorsPrefs.h"
 #include "../../../../prefs/WaveformPrefs.h"
 #include "../../../../widgets/AudacityMessageBox.h"
 
-#include <mutex>
 #include <wx/combobox.h>
 #include <wx/frame.h>
 #include <wx/sizer.h>
@@ -402,20 +401,23 @@ void RateMenuTable::InitMenu(Menu *pMenu, void *pUserData)
    }
 }
 
+// Because of Bug 1780 we can't use POPUP_MENU_RADIO_ITEM
+// If we did, we'd get no message when clicking on Other...
+// when it is already selected.
 BEGIN_POPUP_MENU(RateMenuTable)
-   POPUP_MENU_RADIO_ITEM(OnRate8ID, _("8000 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate11ID, _("11025 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate16ID, _("16000 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate22ID, _("22050 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate44ID, _("44100 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate48ID, _("48000 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate88ID, _("88200 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate96ID, _("96000 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate176ID, _("176400 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate192ID, _("192000 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate352ID, _("352800 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRate384ID, _("384000 Hz"), OnRateChange)
-   POPUP_MENU_RADIO_ITEM(OnRateOtherID, _("&Other..."), OnRateOther)
+   POPUP_MENU_CHECK_ITEM(OnRate8ID, _("8000 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate11ID, _("11025 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate16ID, _("16000 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate22ID, _("22050 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate44ID, _("44100 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate48ID, _("48000 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate88ID, _("88200 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate96ID, _("96000 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate176ID, _("176400 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate192ID, _("192000 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate352ID, _("352800 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRate384ID, _("384000 Hz"), OnRateChange)
+   POPUP_MENU_CHECK_ITEM(OnRateOtherID, _("&Other..."), OnRateOther)
 END_POPUP_MENU()
 
 const int nRates = 12;
@@ -586,7 +588,7 @@ WaveTrackMenuTable &WaveTrackMenuTable::Instance( Track * pTrack )
    wxCommandEvent evt;
    // Clear it out so we force a repopulate
    instance.Invalidate( evt );
-   // Ensure we know how to poulate.
+   // Ensure we know how to populate.
    // Messy, but the design does not seem to offer an alternative.
    // We won't use pTrack after populate.
    instance.mpTrack = pTrack;
@@ -600,19 +602,23 @@ void WaveTrackMenuTable::InitMenu(Menu *pMenu, void *pUserData)
 
    std::vector<int> checkedIds;
 
-   const int display = pTrack->GetDisplay();
-   checkedIds.push_back(
-      display == WaveTrackViewConstants::Waveform
-         ? (pTrack->GetWaveformSettings().isLinear()
-            ? OnWaveformID : OnWaveformDBID)
-         : OnSpectrumID);
+   const auto displays = WaveTrackView::Get( *pTrack ).GetDisplays();
+   for ( auto display : displays ) {
+      checkedIds.push_back(
+         display == WaveTrackViewConstants::Waveform
+            ? (pTrack->GetWaveformSettings().isLinear()
+               ? OnWaveformID : OnWaveformDBID)
+            : OnSpectrumID);
+   }
 
    // Bug 1253.  Shouldn't open preferences if audio is busy.
    // We can't change them on the fly yet anyway.
    auto gAudioIO = AudioIOBase::Get();
    const bool bAudioBusy = gAudioIO->IsBusy();
-   pMenu->Enable(OnSpectrogramSettingsID,
-      (display == WaveTrackViewConstants::Spectrum) && !bAudioBusy);
+   bool hasSpectrum =
+      make_iterator_range( displays.begin(), displays.end() )
+         .contains( WaveTrackViewConstants::Spectrum );
+   pMenu->Enable(OnSpectrogramSettingsID, hasSpectrum && !bAudioBusy);
 
    AudacityProject *const project = ::GetActiveProject();
    auto &tracks = TrackList::Get( *project );
@@ -684,9 +690,14 @@ void WaveTrackMenuTable::InitMenu(Menu *pMenu, void *pUserData)
 BEGIN_POPUP_MENU(WaveTrackMenuTable)
    POPUP_MENU_SEPARATOR()
 
-   POPUP_MENU_RADIO_ITEM(OnWaveformID, _("Wa&veform"), OnSetDisplay)
-   POPUP_MENU_RADIO_ITEM(OnWaveformDBID, _("&Waveform (dB)"), OnSetDisplay)
-   POPUP_MENU_RADIO_ITEM(OnSpectrumID, _("&Spectrogram"), OnSetDisplay)
+   // View types are now a non-exclusive choice.  The first two are mutually
+   // exclusive, but the view may be in a state with either of those, and also
+   // spectrogram, after a mouse drag.  Clicking any of these three makes that
+   // view take up all the height.
+   POPUP_MENU_CHECK_ITEM(OnWaveformID, _("Wa&veform"), OnSetDisplay)
+   POPUP_MENU_CHECK_ITEM(OnWaveformDBID, _("&Waveform (dB)"), OnSetDisplay)
+   POPUP_MENU_CHECK_ITEM(OnSpectrumID, _("&Spectrogram"), OnSetDisplay)
+
    POPUP_MENU_ITEM(OnSpectrogramSettingsID, _("S&pectrogram Settings..."), OnSpectrogramSettings)
    POPUP_MENU_SEPARATOR()
 
@@ -703,9 +714,15 @@ BEGIN_POPUP_MENU(WaveTrackMenuTable)
 #endif
 
    WaveTrack *const pTrack = static_cast<WaveTrack*>(mpTrack);
-   if( pTrack && pTrack->GetDisplay() != WaveTrackViewConstants::Spectrum  ){
-      POPUP_MENU_SEPARATOR()
-      POPUP_MENU_SUB_MENU(OnWaveColorID, _("&Wave Color"), WaveColorMenuTable)
+   if ( pTrack ) {
+      const auto displays = WaveTrackView::Get( *pTrack ).GetDisplays();
+      bool hasWaveform =
+         make_iterator_range( displays.begin(), displays.end() )
+            .contains( WaveTrackViewConstants::Waveform );
+      if( hasWaveform ){
+         POPUP_MENU_SEPARATOR()
+         POPUP_MENU_SUB_MENU(OnWaveColorID, _("&Wave Color"), WaveColorMenuTable)
+      }
    }
 
    POPUP_MENU_SEPARATOR()
@@ -724,7 +741,7 @@ void WaveTrackMenuTable::OnSetDisplay(wxCommandEvent & event)
    const auto pTrack = static_cast<WaveTrack*>(mpData->pTrack);
 
    bool linear = false;
-   WaveTrack::WaveTrackDisplay id;
+   WaveTrackView::WaveTrackDisplay id;
    switch (idInt) {
    default:
    case OnWaveformID:
@@ -735,14 +752,16 @@ void WaveTrackMenuTable::OnSetDisplay(wxCommandEvent & event)
       id = Spectrum; break;
    }
 
-   const bool wrongType = pTrack->GetDisplay() != id;
+   const auto displays = WaveTrackView::Get( *pTrack ).GetDisplays();
+   const bool wrongType = !(displays.size() == 1 && displays[0] == id);
    const bool wrongScale =
       (id == Waveform &&
       pTrack->GetWaveformSettings().isLinear() != linear);
    if (wrongType || wrongScale) {
       for (auto channel : TrackList::Channels(pTrack)) {
          channel->SetLastScaleType();
-         channel->SetDisplay(WaveTrack::WaveTrackDisplay(id));
+         WaveTrackView::Get( *channel )
+            .SetDisplay(WaveTrackView::WaveTrackDisplay(id));
          if (wrongScale)
             channel->GetIndependentWaveformSettings().scaleType = linear
                ? WaveformSettings::stLinear
@@ -800,7 +819,8 @@ void WaveTrackMenuTable::OnSpectrogramSettings(wxCommandEvent &)
       // (pTrack->GetDisplay() == WaveTrack::Spectrum) ? 1 :
       0;
 
-   wxString title(pTrack->GetName() + wxT(": "));
+   /* i18n-hint: An item name followed by a value, with appropriate separating punctuation */
+   auto title = wxString::Format(_("%s: %s"), pTrack->GetName(), wxT(""));
    ViewSettingsDialog dialog(mpData->pParent, title, factories, page);
 
    if (0 != dialog.ShowModal()) {
@@ -877,8 +897,8 @@ void WaveTrackMenuTable::OnMergeStereo(wxCommandEvent &)
 
    // Set NEW track heights and minimized state
    auto
-      &view = TrackView::Get( *pTrack ),
-      &partnerView = TrackView::Get( *partner );
+      &view = WaveTrackView::Get( *pTrack ),
+      &partnerView = WaveTrackView::Get( *partner );
    view.SetMinimized(false);
    partnerView.SetMinimized(false);
    int AverageHeight = (view.GetHeight() + partnerView.GetHeight()) / 2;
@@ -886,6 +906,8 @@ void WaveTrackMenuTable::OnMergeStereo(wxCommandEvent &)
    partnerView.SetHeight(AverageHeight);
    view.SetMinimized(bBothMinimizedp);
    partnerView.SetMinimized(bBothMinimizedp);
+
+   partnerView.RestorePlacements( view.SavePlacements() );
 
    //On Demand - join the queues together.
    if (ODManager::IsInstanceCreated())
@@ -955,8 +977,8 @@ void WaveTrackMenuTable::OnSwapChannels(wxCommandEvent &)
    if (channels.size() != 2)
       return;
 
-   auto &trackPanel = TrackPanel::Get( *project );
-   Track *const focused = trackPanel.GetFocusedTrack();
+   auto &trackFocus = TrackFocus::Get( *project );
+   Track *const focused = trackFocus.Get();
    const bool hasFocus = channels.contains( focused );
 
    auto partner = *channels.rbegin();
@@ -968,7 +990,7 @@ void WaveTrackMenuTable::OnSwapChannels(wxCommandEvent &)
    tracks.GroupChannels( *partner, 2 );
 
    if (hasFocus)
-      trackPanel.SetFocusedTrack(partner);
+      trackFocus.Set(partner);
 
    /* i18n-hint: The string names a track  */
    ProjectHistory::Get( *project )
@@ -1039,7 +1061,6 @@ void SliderDrawFunction
    Selector( sliderRect, wt, captured, nullptr )->OnPaint(*dc, highlight);
 }
 
-#include "WaveTrackSliderHandles.h"
 void PanSliderDrawFunction
 ( TrackPanelDrawingContext &context,
   const wxRect &rect, const Track *pTrack )
@@ -1295,3 +1316,12 @@ template<> template<> auto DoGetWaveTrackControls::Implementation() -> Function 
    };
 }
 static DoGetWaveTrackControls registerDoGetWaveTrackControls;
+
+using GetDefaultWaveTrackHeight = GetDefaultTrackHeight::Override< WaveTrack >;
+template<> template<>
+auto GetDefaultWaveTrackHeight::Implementation() -> Function {
+   return [](WaveTrack &) {
+      return WaveTrackControls::DefaultWaveTrackHeight();
+   };
+}
+static GetDefaultWaveTrackHeight registerGetDefaultWaveTrackHeight;

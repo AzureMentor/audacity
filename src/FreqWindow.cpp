@@ -8,7 +8,7 @@
 
 *******************************************************************//**
 
-\class FreqWindow
+\class FrequencyPlotDialog
 \brief Displays a spectrum plot of the waveform.  Has options for
 selecting parameters of the plot.
 
@@ -18,7 +18,7 @@ the mouse around.
 *//****************************************************************//**
 
 \class FreqPlot
-\brief Works with FreqWindow to dsplay a spectrum plot of the waveform.
+\brief Works with FrequencyPlotDialog to dsplay a spectrum plot of the waveform.
 This class actually does the graph display.
 
 Has a feature that finds peaks and reports their value as you move
@@ -85,7 +85,6 @@ and in the spectrogram spectral selection.
 
 #include "WaveTrack.h"
 
-#include "./widgets/LinkingHtmlWindow.h"
 #include "./widgets/HelpSystem.h"
 #include "widgets/AudacityMessageBox.h"
 #include "widgets/Ruler.h"
@@ -167,23 +166,23 @@ static const char * ZoomOut[] = {
 "@+@@            ",
 " @@             "};
 
-// FreqWindow
+// FrequencyPlotDialog
 
-BEGIN_EVENT_TABLE(FreqWindow, wxDialogWrapper)
-   EVT_CLOSE(FreqWindow::OnCloseWindow)
-   EVT_SIZE(FreqWindow::OnSize)
-   EVT_SLIDER(FreqZoomSliderID, FreqWindow::OnZoomSlider)
-   EVT_COMMAND_SCROLL(FreqPanScrollerID, FreqWindow::OnPanScroller)
-   EVT_CHOICE(FreqAlgChoiceID, FreqWindow::OnAlgChoice)
-   EVT_CHOICE(FreqSizeChoiceID, FreqWindow::OnSizeChoice)
-   EVT_CHOICE(FreqFuncChoiceID, FreqWindow::OnFuncChoice)
-   EVT_CHOICE(FreqAxisChoiceID, FreqWindow::OnAxisChoice)
-   EVT_BUTTON(FreqExportButtonID, FreqWindow::OnExport)
-   EVT_BUTTON(ReplotButtonID, FreqWindow::OnReplot)
-   EVT_BUTTON(wxID_CANCEL, FreqWindow::OnCloseButton)
-   EVT_BUTTON(wxID_HELP, FreqWindow::OnGetURL)
-   EVT_CHECKBOX(GridOnOffID, FreqWindow::OnGridOnOff)
-   EVT_COMMAND(wxID_ANY, EVT_FREQWINDOW_RECALC, FreqWindow::OnRecalc)
+BEGIN_EVENT_TABLE(FrequencyPlotDialog, wxDialogWrapper)
+   EVT_CLOSE(FrequencyPlotDialog::OnCloseWindow)
+   EVT_SIZE(FrequencyPlotDialog::OnSize)
+   EVT_SLIDER(FreqZoomSliderID, FrequencyPlotDialog::OnZoomSlider)
+   EVT_COMMAND_SCROLL(FreqPanScrollerID, FrequencyPlotDialog::OnPanScroller)
+   EVT_CHOICE(FreqAlgChoiceID, FrequencyPlotDialog::OnAlgChoice)
+   EVT_CHOICE(FreqSizeChoiceID, FrequencyPlotDialog::OnSizeChoice)
+   EVT_CHOICE(FreqFuncChoiceID, FrequencyPlotDialog::OnFuncChoice)
+   EVT_CHOICE(FreqAxisChoiceID, FrequencyPlotDialog::OnAxisChoice)
+   EVT_BUTTON(FreqExportButtonID, FrequencyPlotDialog::OnExport)
+   EVT_BUTTON(ReplotButtonID, FrequencyPlotDialog::OnReplot)
+   EVT_BUTTON(wxID_CANCEL, FrequencyPlotDialog::OnCloseButton)
+   EVT_BUTTON(wxID_HELP, FrequencyPlotDialog::OnGetURL)
+   EVT_CHECKBOX(GridOnOffID, FrequencyPlotDialog::OnGridOnOff)
+   EVT_COMMAND(wxID_ANY, EVT_FREQWINDOW_RECALC, FrequencyPlotDialog::OnRecalc)
 END_EVENT_TABLE()
 
 SpectrumAnalyst::SpectrumAnalyst()
@@ -197,7 +196,7 @@ SpectrumAnalyst::~SpectrumAnalyst()
 {
 }
 
-FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
+FrequencyPlotDialog::FrequencyPlotDialog(wxWindow * parent, wxWindowID id,
                            const wxString & title,
                            const wxPoint & pos)
 :  wxDialogWrapper(parent, id, title, pos, wxDefaultSize,
@@ -257,19 +256,19 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
    mArrowCursor = std::make_unique<wxCursor>(wxCURSOR_ARROW);
    mCrossCursor = std::make_unique<wxCursor>(wxCURSOR_CROSS);
 
-   gPrefs->Read(wxT("/FreqWindow/DrawGrid"), &mDrawGrid, true);
+   gPrefs->Read(wxT("/FrequencyPlotDialog/DrawGrid"), &mDrawGrid, true);
 
    long size;
-   gPrefs->Read(wxT("/FreqWindow/SizeChoice"), &mSize, 3);
+   gPrefs->Read(wxT("/FrequencyPlotDialog/SizeChoice"), &mSize, 3);
    sizeChoices[mSize].ToLong(&size);
    mWindowSize = size;
 
    int alg;
-   gPrefs->Read(wxT("/FreqWindow/AlgChoice"), &alg, 0);
+   gPrefs->Read(wxT("/FrequencyPlotDialog/AlgChoice"), &alg, 0);
    mAlg = static_cast<SpectrumAnalyst::Algorithm>(alg);
 
-   gPrefs->Read(wxT("/FreqWindow/FuncChoice"), &mFunc, 3);
-   gPrefs->Read(wxT("/FreqWindow/AxisChoice"), &mAxis, 1);
+   gPrefs->Read(wxT("/FrequencyPlotDialog/FuncChoice"), &mFunc, 3);
+   gPrefs->Read(wxT("/FrequencyPlotDialog/AxisChoice"), &mAxis, 1);
    gPrefs->Read(ENV_DB_KEY, &dBRange, ENV_DB_RANGE);
    if(dBRange < 90.)
       dBRange = 90.;
@@ -293,7 +292,7 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
       S.StartVerticalLay(2);
       {
          vRuler = safenew RulerPanel(
-            this, wxID_ANY, wxVERTICAL,
+            S.GetParent(), wxID_ANY, wxVERTICAL,
             wxSize{ 100, 100 }, // Ruler can't handle small sizes
             RulerPanel::Range{ 0.0, -dBRange },
             Ruler::LinearDBFormat,
@@ -304,54 +303,62 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
          );
 
          S.AddSpace(wxDefaultCoord, 1);
-         S.Prop(1);
-         S.AddWindow(vRuler, wxALIGN_RIGHT | wxALIGN_TOP);
+         S.Prop(1)
+            .Position(wxALIGN_RIGHT | wxALIGN_TOP)
+            .AddWindow(vRuler);
          S.AddSpace(wxDefaultCoord, 1);
       }
       S.EndVerticalLay();
 
-      mFreqPlot = safenew FreqPlot(this, wxID_ANY);
-      mFreqPlot->SetMinSize(wxSize(wxDefaultCoord, FREQ_WINDOW_HEIGHT));
-      S.Prop(1);
-      S.AddWindow(mFreqPlot, wxEXPAND);
+      mFreqPlot = safenew FreqPlot(S.GetParent(), wxID_ANY);
+      S.Prop(1)
+         .Position(wxEXPAND)
+         .MinSize( { wxDefaultCoord, FREQ_WINDOW_HEIGHT } )
+         .AddWindow(mFreqPlot);
 
       S.StartHorizontalLay(wxEXPAND, 0);
       {
          S.StartVerticalLay();
          {
-            mPanScroller = safenew wxScrollBar(this, FreqPanScrollerID,
+            mPanScroller = safenew wxScrollBar(S.GetParent(), FreqPanScrollerID,
                wxDefaultPosition, wxDefaultSize, wxSB_VERTICAL);
 #if wxUSE_ACCESSIBILITY
             // so that name can be set on a standard control
             mPanScroller->SetAccessible(safenew WindowAccessible(mPanScroller));
 #endif
-            mPanScroller->SetName(_("Scroll"));
             S.Prop(1);
-            S.AddWindow(mPanScroller, wxALIGN_LEFT | wxTOP);
+            S
+               .Name(XO("Scroll"))
+               .Position( wxALIGN_LEFT | wxTOP)
+               .AddWindow(mPanScroller);
          }
          S.EndVerticalLay();
 
          S.StartVerticalLay();
          {
-            wxStaticBitmap *zi = safenew wxStaticBitmap(this, wxID_ANY, wxBitmap(ZoomIn));
-            S.AddWindow((wxWindow *) zi, wxALIGN_CENTER);
+            wxStaticBitmap *zi = safenew wxStaticBitmap(S.GetParent(), wxID_ANY, wxBitmap(ZoomIn));
+            S.Position(wxALIGN_CENTER)
+               .AddWindow(zi);
 
             S.AddSpace(5);
 
-            mZoomSlider = safenew wxSliderWrapper(this, FreqZoomSliderID, 100, 1, 100,
+            mZoomSlider = safenew wxSliderWrapper(S.GetParent(), FreqZoomSliderID, 100, 1, 100,
                wxDefaultPosition, wxDefaultSize, wxSL_VERTICAL);
             S.Prop(1);
-            S.AddWindow(mZoomSlider, wxALIGN_CENTER_HORIZONTAL);
+            S
+               .Name(XO("Zoom"))
+               .Position(wxALIGN_CENTER_HORIZONTAL)
+               .AddWindow(mZoomSlider);
 #if wxUSE_ACCESSIBILITY
             // so that name can be set on a standard control
             mZoomSlider->SetAccessible(safenew WindowAccessible(mZoomSlider));
 #endif
-            mZoomSlider->SetName(_("Zoom"));
 
             S.AddSpace(5);
 
-            wxStaticBitmap *zo = safenew wxStaticBitmap(this, wxID_ANY, wxBitmap(ZoomOut));
-            S.AddWindow((wxWindow *) zo, wxALIGN_CENTER);
+            wxStaticBitmap *zo = safenew wxStaticBitmap(S.GetParent(), wxID_ANY, wxBitmap(ZoomOut));
+            S.Position(wxALIGN_CENTER)
+               .AddWindow(zo);
          }
          S.EndVerticalLay();
 
@@ -368,7 +375,7 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
       S.StartHorizontalLay(wxEXPAND, 0);
       {
          hRuler  = safenew RulerPanel(
-            this, wxID_ANY, wxHORIZONTAL,
+            S.GetParent(), wxID_ANY, wxHORIZONTAL,
             wxSize{ 100, 100 }, // Ruler can't handle small sizes
             RulerPanel::Range{ 10, 20000 },
             Ruler::RealFormat,
@@ -381,8 +388,9 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
          );
 
          S.AddSpace(1, wxDefaultCoord);
-         S.Prop(1);
-         S.AddWindow(hRuler, wxALIGN_LEFT | wxALIGN_TOP);
+         S.Prop(1)
+            .Position(wxALIGN_LEFT | wxALIGN_TOP)
+            .AddWindow(hRuler);
          S.AddSpace(1, wxDefaultCoord);
       }
       S.EndHorizontalLay();
@@ -411,13 +419,13 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
          {
             S.AddPrompt(_("Cursor:"));
 
-            S.SetStyle(wxTE_READONLY);
-            mCursorText = S.AddTextBox( {}, wxT(""), 10);
+            mCursorText = S.Style(wxTE_READONLY)
+               .AddTextBox( {}, wxT(""), 10);
 
             S.AddPrompt(_("Peak:"));
 
-            S.SetStyle(wxTE_READONLY);
-            mPeakText = S.AddTextBox( {}, wxT(""), 10);
+            mPeakText = S.Style(wxTE_READONLY)
+               .AddTextBox( {}, wxT(""), 10);
             S.AddSpace(5);
 
             mGridOnOff = S.Id(GridOnOffID).AddCheckBox(_("&Grids"), mDrawGrid);
@@ -446,15 +454,15 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
 
       S.AddSpace(5);
 
-      mAlgChoice = S.Id(FreqAlgChoiceID)
+      mAlgChoice = S.Id(FreqAlgChoiceID).Focus()
+         .MinSize( { wxDefaultCoord, wxDefaultCoord } )
          .AddChoice(_("&Algorithm:"), algChoices, mAlg);
-      S.SetSizeHints(wxDefaultCoord, wxDefaultCoord);
 
       S.AddSpace(5);
 
       mSizeChoice = S.Id(FreqSizeChoiceID)
+         .MinSize( { wxDefaultCoord, wxDefaultCoord } )
          .AddChoice(_("&Size:"), sizeChoices, mSize);
-      S.SetSizeHints(wxDefaultCoord, wxDefaultCoord);
 
       S.AddSpace(5);
 
@@ -470,15 +478,15 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
       S.AddSpace(5);
 
       mFuncChoice = S.Id(FreqFuncChoiceID)
+         .MinSize( { wxDefaultCoord, wxDefaultCoord } )
          .AddChoice(_("&Function:"), funcChoices, mFunc);
-      S.SetSizeHints(wxDefaultCoord, wxDefaultCoord);
       mFuncChoice->MoveAfterInTabOrder(mSizeChoice);
 
       S.AddSpace(5);
 
       mAxisChoice = S.Id(FreqAxisChoiceID)
+         .MinSize( { wxDefaultCoord, wxDefaultCoord } )
          .AddChoice(_("&Axis:"), axisChoices, mAxis);
-      S.SetSizeHints(wxDefaultCoord, wxDefaultCoord);
       mAxisChoice->MoveAfterInTabOrder(mFuncChoice);
 
       S.AddSpace(5);
@@ -500,8 +508,9 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
 
    S.AddSpace(5);
 
-   mProgress = safenew FreqGauge(this, wxID_ANY); //, wxST_SIZEGRIP);
-   S.AddWindow(mProgress, wxEXPAND);
+   mProgress = safenew FreqGauge(S.GetParent(), wxID_ANY); //, wxST_SIZEGRIP);
+   S.Position(wxEXPAND)
+      .AddWindow(mProgress);
 
    // Log-frequency axis works for spectrum plots only.
    if (mAlg != SpectrumAnalyst::Spectrum)
@@ -513,7 +522,6 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
 
    mCloseButton = static_cast<wxButton*>(FindWindowById( wxID_CANCEL ));
    mCloseButton->SetDefault();
-   mCloseButton->SetFocus();
 
    Layout();
    Fit();
@@ -521,7 +529,6 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
    Center();
 
    SetMinSize(GetSize());
-   mAlgChoice->SetFocus();
 
 #if defined(__WXGTK__)
    // This should be rechecked with wx3.
@@ -540,18 +547,18 @@ FreqWindow::FreqWindow(wxWindow * parent, wxWindowID id,
 #endif
 }
 
-FreqWindow::~FreqWindow()
+FrequencyPlotDialog::~FrequencyPlotDialog()
 {
 }
 
-void FreqWindow::OnGetURL(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnGetURL(wxCommandEvent & WXUNUSED(event))
 {
    // Original help page is back on-line (March 2016), but the manual should be more reliable.
    // http://www.eramp.com/WCAG_2_audio_contrast_tool_help.htm
    HelpSystem::ShowHelp(this, wxT("Plot Spectrum"));
 }
 
-bool FreqWindow::Show(bool show)
+bool FrequencyPlotDialog::Show(bool show)
 {
    if (!show)
    {
@@ -577,7 +584,7 @@ bool FreqWindow::Show(bool show)
    return res;
 }
 
-void FreqWindow::GetAudio()
+void FrequencyPlotDialog::GetAudio()
 {
    mData.reset();
    mDataLen = 0;
@@ -632,7 +639,7 @@ void FreqWindow::GetAudio()
    }
 }
 
-void FreqWindow::OnSize(wxSizeEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnSize(wxSizeEvent & WXUNUSED(event))
 {
    Layout();
 
@@ -641,7 +648,7 @@ void FreqWindow::OnSize(wxSizeEvent & WXUNUSED(event))
    Refresh(true);
 }
 
-void FreqWindow::DrawBackground(wxMemoryDC & dc)
+void FrequencyPlotDialog::DrawBackground(wxMemoryDC & dc)
 {
    Layout();
 
@@ -663,7 +670,7 @@ void FreqWindow::DrawBackground(wxMemoryDC & dc)
    dc.SetFont(mFreqFont);
 }
 
-void FreqWindow::DrawPlot()
+void FrequencyPlotDialog::DrawPlot()
 {
    if (!mData || mDataLen < mWindowSize || mAnalyst->GetProcessedSize() == 0) {
       wxMemoryDC memDC;
@@ -814,7 +821,7 @@ void FreqWindow::DrawPlot()
 }
 
 
-void FreqWindow::PlotMouseEvent(wxMouseEvent & event)
+void FrequencyPlotDialog::PlotMouseEvent(wxMouseEvent & event)
 {
    if (event.Moving() && (event.m_x != mMouseX || event.m_y != mMouseY)) {
       mMouseX = event.m_x;
@@ -829,17 +836,17 @@ void FreqWindow::PlotMouseEvent(wxMouseEvent & event)
    }
 }
 
-void FreqWindow::OnPanScroller(wxScrollEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnPanScroller(wxScrollEvent & WXUNUSED(event))
 {
    DrawPlot();
 }
 
-void FreqWindow::OnZoomSlider(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnZoomSlider(wxCommandEvent & WXUNUSED(event))
 {
    DrawPlot();
 }
 
-void FreqWindow::OnAlgChoice(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnAlgChoice(wxCommandEvent & WXUNUSED(event))
 {
    mAlg = SpectrumAnalyst::Algorithm(mAlgChoice->GetSelection());
 
@@ -856,7 +863,7 @@ void FreqWindow::OnAlgChoice(wxCommandEvent & WXUNUSED(event))
    SendRecalcEvent();
 }
 
-void FreqWindow::OnSizeChoice(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnSizeChoice(wxCommandEvent & WXUNUSED(event))
 {
    long windowSize = 0;
    mSizeChoice->GetStringSelection().ToLong(&windowSize);
@@ -865,18 +872,18 @@ void FreqWindow::OnSizeChoice(wxCommandEvent & WXUNUSED(event))
    SendRecalcEvent();
 }
 
-void FreqWindow::OnFuncChoice(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnFuncChoice(wxCommandEvent & WXUNUSED(event))
 {
    SendRecalcEvent();
 }
 
-void FreqWindow::OnAxisChoice(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnAxisChoice(wxCommandEvent & WXUNUSED(event))
 {
    mLogAxis = mAxisChoice->GetSelection() ? true : false;
    DrawPlot();
 }
 
-void FreqWindow::PlotPaint(wxPaintEvent & event)
+void FrequencyPlotDialog::PlotPaint(wxPaintEvent & event)
 {
    wxPaintDC dc( (wxWindow *) event.GetEventObject() );
 
@@ -982,29 +989,29 @@ void FreqWindow::PlotPaint(wxPaintEvent & event)
    dc.DrawRectangle(r);
 }
 
-void FreqWindow::OnCloseWindow(wxCloseEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnCloseWindow(wxCloseEvent & WXUNUSED(event))
 {
    Show(false);
 }
 
-void FreqWindow::OnCloseButton(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnCloseButton(wxCommandEvent & WXUNUSED(event))
 {
-   gPrefs->Write(wxT("/FreqWindow/DrawGrid"), mDrawGrid);
-   gPrefs->Write(wxT("/FreqWindow/SizeChoice"), mSizeChoice->GetSelection());
-   gPrefs->Write(wxT("/FreqWindow/AlgChoice"), mAlgChoice->GetSelection());
-   gPrefs->Write(wxT("/FreqWindow/FuncChoice"), mFuncChoice->GetSelection());
-   gPrefs->Write(wxT("/FreqWindow/AxisChoice"), mAxisChoice->GetSelection());
+   gPrefs->Write(wxT("/FrequencyPlotDialog/DrawGrid"), mDrawGrid);
+   gPrefs->Write(wxT("/FrequencyPlotDialog/SizeChoice"), mSizeChoice->GetSelection());
+   gPrefs->Write(wxT("/FrequencyPlotDialog/AlgChoice"), mAlgChoice->GetSelection());
+   gPrefs->Write(wxT("/FrequencyPlotDialog/FuncChoice"), mFuncChoice->GetSelection());
+   gPrefs->Write(wxT("/FrequencyPlotDialog/AxisChoice"), mAxisChoice->GetSelection());
    gPrefs->Flush();
    Show(false);
 }
 
-void FreqWindow::SendRecalcEvent()
+void FrequencyPlotDialog::SendRecalcEvent()
 {
    wxCommandEvent e(EVT_FREQWINDOW_RECALC, wxID_ANY);
    GetEventHandler()->AddPendingEvent(e);
 }
 
-void FreqWindow::Recalc()
+void FrequencyPlotDialog::Recalc()
 {
    if (!mData || mDataLen < mWindowSize) {
       DrawPlot();
@@ -1049,7 +1056,7 @@ void FreqWindow::Recalc()
    DrawPlot();
 }
 
-void FreqWindow::OnExport(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnExport(wxCommandEvent & WXUNUSED(event))
 {
    wxString fName = _("spectrum.txt");
 
@@ -1101,7 +1108,7 @@ void FreqWindow::OnExport(wxCommandEvent & WXUNUSED(event))
    f.Close();
 }
 
-void FreqWindow::OnReplot(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnReplot(wxCommandEvent & WXUNUSED(event))
 {
    gPrefs->Read(ENV_DB_KEY, &dBRange, ENV_DB_RANGE);
    if(dBRange < 90.)
@@ -1110,14 +1117,14 @@ void FreqWindow::OnReplot(wxCommandEvent & WXUNUSED(event))
    SendRecalcEvent();
 }
 
-void FreqWindow::OnGridOnOff(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnGridOnOff(wxCommandEvent & WXUNUSED(event))
 {
    mDrawGrid = mGridOnOff->IsChecked();
 
    DrawPlot();
 }
 
-void FreqWindow::OnRecalc(wxCommandEvent & WXUNUSED(event))
+void FrequencyPlotDialog::OnRecalc(wxCommandEvent & WXUNUSED(event))
 {
    Recalc();
 }
@@ -1131,7 +1138,7 @@ END_EVENT_TABLE()
 FreqPlot::FreqPlot(wxWindow *parent, wxWindowID winid)
 :  wxWindow(parent, winid)
 {
-   freqWindow = (FreqWindow *) parent;
+   freqWindow = (FrequencyPlotDialog *) parent;
 }
 
 bool FreqPlot::AcceptsFocus() const

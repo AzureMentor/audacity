@@ -27,6 +27,14 @@ effects from this one class.
 
 #include <float.h>
 
+#if !defined(__WXMSW__)
+#include <dlfcn.h>
+
+#ifndef RTLD_DEEPBIND
+#define RTLD_DEEPBIND 0
+#endif
+#endif
+
 #include <wx/setup.h> // for wxUSE_* macros
 #include <wx/wxprec.h>
 #include <wx/button.h>
@@ -154,6 +162,15 @@ void LadspaEffectsModule::Terminate()
    return;
 }
 
+EffectFamilySymbol LadspaEffectsModule::GetOptionalFamilySymbol()
+{
+#if USE_LADSPA
+   return LADSPAEFFECTS_FAMILY;
+#else
+   return {};
+#endif
+}
+
 const FileExtensions &LadspaEffectsModule::GetFileExtensions()
 {
    static FileExtensions result{{
@@ -260,11 +277,18 @@ unsigned LadspaEffectsModule::DiscoverPluginsAtPath(
    int index = 0;
    int nLoaded = 0;
    LADSPA_Descriptor_Function mainFn = NULL;
+#if defined(__WXMSW__)
    wxDynamicLibrary lib;
    if (lib.Load(path, wxDL_NOW)) {
       wxLogNull logNo;
 
       mainFn = (LADSPA_Descriptor_Function) lib.GetSymbol(wxT("ladspa_descriptor"));
+#else
+   void *lib = dlopen((const char *)path.ToUTF8(), RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
+   if (lib) {
+      mainFn = (LADSPA_Descriptor_Function) dlsym(lib, "ladspa_descriptor");
+#endif
+
       if (mainFn) {
          const LADSPA_Descriptor *data;
 
@@ -283,6 +307,7 @@ unsigned LadspaEffectsModule::DiscoverPluginsAtPath(
    else
       errMsg = _("Could not load the library");
 
+#if defined(__WXMSW__)
    if (lib.IsLoaded()) {
       // PRL:  I suspect Bug1257 -- Crash when enabling Amplio2 -- is the fault of a timing-
       // dependent multi-threading bug in the Amplio2 library itself, in case the unload of the .dll
@@ -291,6 +316,11 @@ unsigned LadspaEffectsModule::DiscoverPluginsAtPath(
       ::wxMilliSleep(10);
       lib.Unload();
    }
+#else
+   if (lib) {
+      dlclose(lib);
+   }
+#endif
 
    wxSetWorkingDirectory(saveOldCWD);
    hadpath ? wxSetEnv(wxT("PATH"), envpath) : wxUnsetEnv(wxT("PATH"));
@@ -355,8 +385,12 @@ FilePaths LadspaEffectsModule::GetSearchPaths()
    // No special paths...probably should look in %CommonProgramFiles%\LADSPA
 
 #else
-   
+
    pathList.push_back(wxGetHomeDir() + wxFILE_SEP_PATH + wxT(".ladspa"));
+#if defined(__LP64__)
+   pathList.push_back(wxT("/usr/local/lib64/ladspa"));
+   pathList.push_back(wxT("/usr/lib64/ladspa"));
+#endif
    pathList.push_back(wxT("/usr/local/lib/ladspa"));
    pathList.push_back(wxT("/usr/lib/ladspa"));
    pathList.push_back(wxT(LIBDIR) wxT("/ladspa"));
@@ -516,8 +550,9 @@ LadspaEffectMeter::~LadspaEffectMeter()
 {
 }
 
-void LadspaEffectMeter::OnIdle(wxIdleEvent & WXUNUSED(evt))
+void LadspaEffectMeter::OnIdle(wxIdleEvent &evt)
 {
+   evt.Skip();
    if (mLastValue != mVal)
    {
       Refresh(false);
@@ -1231,7 +1266,7 @@ bool LadspaEffect::PopulateUI(wxWindow *parent)
             }
 
             wxString labelText = LAT1CTOWX(mData->PortNames[p]);
-            item = safenew wxStaticText(w, 0, labelText + wxT(":"));
+            item = safenew wxStaticText(w, 0, wxString::Format(_("%s:"), labelText));
             gridSizer->Add(item, 0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT | wxALL, 5);
 
             wxString fieldText;
@@ -1407,7 +1442,7 @@ bool LadspaEffect::PopulateUI(wxWindow *parent)
             }
 
             wxString labelText = LAT1CTOWX(mData->PortNames[p]);
-            item = safenew wxStaticText(w, 0, labelText + wxT(":"));
+            item = safenew wxStaticText(w, 0, wxString::Format(_("%s:"), labelText));
             gridSizer->Add(item, 0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT | wxALL, 5);
 
             //LADSPA_PortRangeHint hint = mData->PortRangeHints[p];
@@ -1465,10 +1500,10 @@ bool LadspaEffect::PopulateUI(wxWindow *parent)
    // Try to give the window a sensible default/minimum size
    wxSize sz1 = marginSizer->GetMinSize();
    wxSize sz2 = mParent->GetMinSize();
-   w->SetSizeHints(wxSize(wxMin(sz1.x, sz2.x), wxMin(sz1.y, sz2.y)));
+   w->SetMinSize( { std::min(sz1.x, sz2.x), std::min(sz1.y, sz2.y) } );
 
    // And let the parent reduce to the NEW minimum if possible
-   mParent->SetSizeHints(-1, -1);
+   mParent->SetMinSize({ -1, -1 });
 
    return true;
 }

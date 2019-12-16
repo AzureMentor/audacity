@@ -77,7 +77,7 @@ It handles initialization and termination by subclassing wxApp.
 #include "commands/AppCommandEvent.h"
 #include "widgets/ASlider.h"
 #include "FFmpeg.h"
-#include "LangChoice.h"
+//#include "LangChoice.h"
 #include "Languages.h"
 #include "Menus.h"
 #include "MissingAliasFileDialog.h"
@@ -769,6 +769,43 @@ IMPLEMENT_WX_THEME_SUPPORT
 
 int main(int argc, char *argv[])
 {
+   // Give the user more control over where libraries such as FFmpeg get loaded from.
+   //
+   // Since absolute pathnames are used when loading these libraries, the normal search
+   // path would be DYLD_LIBRARY_PATH, absolute path, DYLD_FALLBACK_LIBRARY_PATH.  This
+   // means that DYLD_LIBRARY_PATH can override what the user actually wants.
+   //
+   // So, we move DYLD_LIBRARY_PATH values to the beginning of DYLD_FALLBACK_LIBRARY_PATH
+   // and clear DYLD_LIBRARY_PATH, allowing the users choice to be the first one tried.
+   extern char **environ;
+
+   char *dyld_library_path = getenv("DYLD_LIBRARY_PATH");
+   if (dyld_library_path)
+   {
+      size_t len = strlen(dyld_library_path);
+      if (len)
+      {
+         std::string fallback(dyld_library_path);
+
+         char *dyld_fallback_library_path = getenv("DYLD_FALLBACK_LIBRARY_PATH");
+         if (dyld_fallback_library_path)
+         {
+            size_t fallback_len = strlen(dyld_fallback_library_path);
+            if (fallback_len)
+            {
+               fallback.push_back(':');
+               fallback.append(dyld_fallback_library_path);
+            }
+         }
+
+         fallback.append(":/usr/local/lib:/usr/lib");
+
+         setenv("DYLD_FALLBACK_LIBRARY_PATH", &fallback.front(), 1);
+         unsetenv("DYLD_LIBRARY_PATH");
+         execve(argv[0], argv, environ);
+      }
+   }
+
    wxDISABLE_DEBUG_SUPPORT();
 
    return wxEntry(argc, argv);
@@ -1358,13 +1395,15 @@ bool AudacityApp::OnInit()
 #endif
 
    // Initialize preferences and language
-   InitPreferences();
+   wxFileName configFileName(FileNames::DataDir(), wxT("audacity.cfg"));
+   InitPreferences( configFileName );
    PopulatePreferences();
    // This test must follow PopulatePreferences, because if an error message
    // must be shown, we need internationalization to have been initialized
    // first, which was done in PopulatePreferences
    if ( !CheckWritablePreferences() ) {
-      ::AudacityMessageBox( UnwritablePreferencesErrorMessage() );
+      ::AudacityMessageBox(
+         UnwritablePreferencesErrorMessage( configFileName ) );
       return false;
    }
 
@@ -1480,6 +1519,7 @@ bool AudacityApp::OnInit()
       temporarywindow.Center();
       temporarywindow.SetTitle(_("Audacity is starting up..."));
       SetTopWindow(&temporarywindow);
+      temporarywindow.Raise();
 
       // ANSWER-ME: Why is YieldFor needed at all?
       //wxEventLoopBase::GetActive()->YieldFor(wxEVT_CATEGORY_UI|wxEVT_CATEGORY_USER_INPUT|wxEVT_CATEGORY_UNKNOWN);
@@ -1622,6 +1662,22 @@ bool AudacityApp::OnInit()
    } );
 #endif
 
+#if defined(__WXMAC__)
+   // The first time this version of Audacity is run or when the preferences
+   // are reset, execute the "tccutil" command to reset the microphone permissions
+   // currently assigned to Audacity.  The end result is that the user will be
+   // prompted to approve/deny Audacity access (again).
+   //
+   // This should resolve confusion of why Audacity appears to record, but only
+   // gets silence due to Audacity being denied microphone access previously.
+   bool permsReset = false;
+   gPrefs->Read(wxT("/MicrophonePermissionsReset"), &permsReset, false);
+   if (!permsReset) {
+      system("tccutil reset Microphone org.audacityteam.audacity");
+      gPrefs->Write(wxT("/MicrophonePermissionsReset"), true);
+   }
+#endif
+
    return TRUE;
 }
 
@@ -1654,7 +1710,7 @@ void AudacityApp::OnKeyDown(wxKeyEvent &event)
                gAudioIO->GetNumCaptureChannels() == 0) ||
          scrubbing)
          // ESC out of other play (but not record)
-         TransportActions::DoStop(*project);
+         ProjectAudioManager::Get( *project ).Stop();
       else
          event.Skip();
    }
@@ -1895,6 +1951,26 @@ bool AudacityApp::CreateSingleInstanceChecker(const wxString &dir)
          _("Use the New or Open commands in the currently running Audacity\nprocess to open multiple projects simultaneously.\n");
       AudacityMessageBox(prompt, _("Audacity is already running"),
             wxOK | wxICON_ERROR);
+
+#ifdef __WXMAC__
+      // Bug 2052
+      // On mac, the lock file may persist and stop Audacity starting properly.
+      auto lockFileName = wxFileName(dir,name);
+      bool bIsLocked = lockFileName.IsOk() && lockFileName.FileExists();
+      if( bIsLocked ){
+         int action = AudacityMessageBox(wxString::Format( _("If you're sure another copy of Audacity isn't\nrunning, Audacity can skip the test for\n'Audacity already running' next time\nby removing the lock file:\n\n%s\n\nDo you want to do that?"),
+               lockFileName.GetFullName()
+            ),
+            _("Possible Lock File Problem"),
+            wxYES_NO | wxICON_EXCLAMATION,
+            NULL);
+         if (action == wxYES){
+            // If locked, unlock.
+            lockFileName.SetPermissions( wxS_DEFAULT );
+            ::wxRemoveFile( lockFileName.GetFullName() );
+         }
+      }
+#endif
       return false;
    }
 

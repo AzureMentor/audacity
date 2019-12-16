@@ -455,6 +455,13 @@ KeyView::SetView(ViewByType type)
       SelectNode(index);
    }
 
+   // ensure that a node is selected so that when the keyview is the focus,
+   // this is indicated visually, and the Narrator screen reader reads it.
+   if ((GetSelection() == wxNOT_FOUND))
+   {
+      SelectNode(LineToIndex(0));
+   }
+
    return;
 }
 
@@ -479,6 +486,13 @@ KeyView::SetFilter(const wxString & filter)
    if (index != wxNOT_FOUND)
    {
       SelectNode(index);
+   }
+
+   // ensure that a node is selected so that when the keyview is the focus,
+   // this is indicated visually, and the Narrator screen reader reads it.
+   if ((GetSelection() == wxNOT_FOUND))
+   {
+      SelectNode(LineToIndex(0));
    }
 }
 
@@ -621,7 +635,7 @@ KeyView::UpdateHScroll()
 void
 KeyView::RefreshBindings(const CommandIDs & names,
                          const wxArrayString & categories,
-                         const wxArrayString & prefixes,
+                         const TranslatableStrings & prefixes,
                          const wxArrayString & labels,
                          const std::vector<NormalizedKeyString> & keys,
                          bool bSort
@@ -651,7 +665,7 @@ KeyView::RefreshBindings(const CommandIDs & names,
 
       // Remove any menu code from the category and prefix
       wxString cat = wxMenuItem::GetLabelText(categories[i]);
-      wxString pfx = wxMenuItem::GetLabelText(prefixes[i]);
+      wxString pfx = wxMenuItem::GetLabelText(prefixes[i].Translation());
 
       // Append "Menu" this node is for a menu title
       if (cat != wxT("Command"))
@@ -762,8 +776,7 @@ KeyView::RefreshBindings(const CommandIDs & names,
       }
       else
       {
-         // Strip any menu codes from label
-         node.label = wxMenuItem::GetLabelText(labels[i].BeforeFirst(wxT('\t')));
+         node.label = labels[i];
       }
 
       // Fill in remaining info
@@ -1331,32 +1344,18 @@ KeyView::OnSetFocus(wxFocusEvent & event)
    // Allow further processing
    event.Skip();
 
+   // Refresh the selected line to pull in any changes while
+   // focus was away...like when setting a NEW key value.  This
+   // will also refresh the visual (highlighted) state.
    if (GetSelection() != wxNOT_FOUND)
    {
-      // Refresh the selected line to pull in any changes while
-      // focus was away...like when setting a NEW key value.  This
-      // will also refresh the visual (highlighted) state.
 	   RefreshRow(GetSelection());
-#if wxUSE_ACCESSIBILITY
-      // Tell accessibility of the change
-      mAx->SetCurrentLine(GetSelection());
-#endif
    }
-   else
-   {
-      if (mLines.size() > 0)
-      {
-         // if no selection, select first line, if there is one
-         SelectNode(LineToIndex(0));
-      }
-      else
-      {
+
 #if wxUSE_ACCESSIBILITY
-         // Tell accessibility, since there may have been a change
-         mAx->SetCurrentLine(wxNOT_FOUND);
+   // Tell accessibility of the change
+   mAx->SetCurrentLine(GetSelection());
 #endif
-      }
-   }
 }
 
 //
@@ -1656,6 +1655,14 @@ KeyView::OnLeftDown(wxMouseEvent & event)
 
          // And make sure current line is still selected
          SelectNode(LineToIndex(line));
+
+         // If a node is closed near the bottom of the tree,
+         // the node may move down, and no longer be at the
+         // mouse pointer position. So don't allow further processing as this
+         // selects the line at the mouse position. Bug 1723.
+         // So we need to set the focus.
+         SetFocus();
+         return;
       }
    }
 

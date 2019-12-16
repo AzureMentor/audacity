@@ -18,8 +18,6 @@
 
 #include "../Prefs.h"
 
-#include "EffectManager.h"
-
 #include "Amplify.h"
 #include "AutoDuck.h"
 #include "BassTreble.h"
@@ -33,6 +31,7 @@
 #include "Equalization.h"
 #include "Fade.h"
 #include "Invert.h"
+#include "Loudness.h"
 #include "Noise.h"
 #ifdef EXPERIMENTAL_NOISE_REDUCTION
 #include "NoiseReduction.h"
@@ -119,13 +118,12 @@
    EFFECT( COMPRESSOR,        EffectCompressor, () )                   \
    EFFECT( DISTORTION,        EffectDistortion, () )                   \
    EFFECT( ECHO,              EffectEcho, () )                         \
-   EFFECT( EQUALIZATION,      EffectEqualization, (kEqLegacy) )        \
    EFFECT( FADEIN,            EffectFade, (true) )                     \
    EFFECT( FADEOUT,           EffectFade, (false) )                    \
-   /* These two effects, not yet */ \
-   /*EFFECT( FILTERCURVE,       EffectEqualization, (kEqOptionCurve) )*/   \
-   /*EFFECT( GRAPHICEQ,         EffectEqualization, (kEqOptionGraphic) )*/ \
+   EFFECT( FILTER_CURVE,         EffectEqualization, (kEqOptionCurve) )   \
+   EFFECT( GRAPHIC_EQ,        EffectEqualization, (kEqOptionGraphic) ) \
    EFFECT( INVERT,            EffectInvert, () )                       \
+   EFFECT( LOUDNESS ,         EffectLoudness, () )                     \
    EFFECT( NORMALIZE,         EffectNormalize, () )                    \
    EFFECT( PHASER,            EffectPhaser, () )                       \
    EFFECT( REPAIR,            EffectRepair, () )                       \
@@ -141,6 +139,9 @@
    EFFECT( AUTODUCK,          EffectAutoDuck, () )                     \
    EFFECT( PAULSTRETCH,       EffectPaulstretch, () )                  \
    SBSMS_EFFECTS
+
+//EFFECT( EQUALIZATION,      EffectEqualization, (kEqLegacy) )      \
+
 
 //
 // Define the list of effects that do not get autoregistered
@@ -289,6 +290,13 @@ void BuiltinEffectsModule::Terminate()
 {
    // Nothing to do here
    return;
+}
+
+EffectFamilySymbol BuiltinEffectsModule::GetOptionalFamilySymbol()
+{
+   // Returns empty, because there should not be an option in Preferences to
+   // disable the built-in effects.
+   return {};
 }
 
 const FileExtensions &BuiltinEffectsModule::GetFileExtensions()

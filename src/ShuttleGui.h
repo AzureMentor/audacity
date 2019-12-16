@@ -15,10 +15,12 @@
 #define SHUTTLE_GUI
 
 #include "Audacity.h"
+#include "audacity/Types.h"
 
 #include <vector>
 #include <wx/slider.h> // to inherit
 #include "MemoryX.h"
+#include <wx/listbase.h> // for wxLIST_FORMAT_LEFT
 
 #include "WrappedType.h"
 
@@ -56,6 +58,7 @@ class wxTreeCtrl;
 class wxTextCtrl;
 class wxSlider;
 class wxNotebook;
+class wxSimplebook;
 typedef wxWindow wxNotebookPage;  // so far, any window can be a page
 class wxButton;
 class wxBitmapButton;
@@ -103,12 +106,164 @@ using wxStaticBoxWrapper = wxStaticBox;
 using wxSliderWrapper = wxSlider;
 #endif
 
+template< typename T > class SettingSpec {
+public:
+   SettingSpec( const RegistryPath &path, const T &defaultValue = {} )
+      : mPath{ path }, mDefaultValue{ defaultValue }
+   {}
+
+   const RegistryPath &GetPath() const { return mPath; }
+   const T &GetDefault() const { return mDefaultValue; }
+
+private:
+   RegistryPath mPath;
+   T mDefaultValue;
+};
+
+namespace DialogDefinition {
+
+struct Item {
+   Item() = default;
+
+   // Factory is a class that returns a value of some subclass of wxValidator
+   // We must wrap it in another lambda to allow the return type of f to
+   // vary, and avoid the "slicing" problem.
+   // (That is, std::function<wxValidator()> would not work.)
+   template<typename Factory>
+   Item&& Validator( const Factory &f ) &&
+   {
+      mValidatorSetter = [f](wxWindow *p){ p->SetValidator(f()); };
+      return std::move(*this);
+   }
+
+   // This allows further abbreviation of the previous:
+   template<typename V, typename... Args>
+   Item&& Validator( Args&&... args ) &&
+   { return std::move(*this).Validator( [args...]{ return V( args... ); } ); }
+
+   Item&& ToolTip( const TranslatableString &tip ) &&
+   {
+      mToolTip = tip;
+      return std::move( *this );
+   }
+
+   // Menu codes in the translation will be stripped
+   Item&& Name( const TranslatableString &name ) &&
+   {
+      mName = name;
+      return std::move( *this );
+   }
+
+   // Append a space, then the translation of the given string, to control name
+   // (not the title or label:  this affects the screen reader behavior)
+   Item&& NameSuffix( const TranslatableString &suffix ) &&
+   {
+      mNameSuffix = suffix;
+      return std::move( *this );
+   }
+
+   Item&& Style( long style ) &&
+   {
+      miStyle = style;
+      return std::move( *this );
+   }
+
+   // Only the last item specified as focused (if more than one) will be
+   Item&& Focus( bool focused = true ) &&
+   {
+      mFocused = focused;
+      return std::move( *this );
+   }
+
+   Item&& Disable( bool disabled = true ) &&
+   {
+      mDisabled = disabled;
+      return std::move( *this );
+   }
+
+   // Dispatch events from the control to the dialog
+   // The template type deduction ensures consistency between the argument type
+   // and the event type.  It does not (yet) ensure correctness of the type of
+   // the handler object.
+   template< typename Tag, typename Argument, typename Handler >
+   auto ConnectRoot(
+      wxEventTypeTag<Tag> eventType,
+      void (Handler::*func)(Argument&)
+   ) &&
+        -> typename std::enable_if<
+            std::is_base_of<Argument, Tag>::value,
+            Item&&
+        >::type
+   {
+      mRootConnections.push_back({
+         eventType,
+         (void(wxEvtHandler::*)(wxEvent&)) (
+            static_cast<void(wxEvtHandler::*)(Argument&)>( func )
+         )
+      });
+      return std::move( *this );
+   }
+
+   Item&& MinSize() && // set best size as min size
+   {
+      mUseBestSize = true;
+      return std::move ( *this );
+   }
+
+   Item&& MinSize( wxSize sz ) &&
+   {
+      mMinSize = sz; mHasMinSize = true;
+      return std::move ( *this );
+   }
+
+   Item&& Position( int flags ) &&
+   {
+      mWindowPositionFlags = flags;
+      return std::move( *this );
+   }
+
+   Item&& Size( wxSize size ) &&
+   {
+      mWindowSize = size;
+      return std::move( *this );
+   }
+
+   std::function< void(wxWindow*) > mValidatorSetter;
+   TranslatableString mToolTip;
+   TranslatableString mName;
+   TranslatableString mNameSuffix;
+
+   std::vector<std::pair<wxEventType, wxObjectEventFunction>> mRootConnections;
+
+   long miStyle{};
+
+   // Applies to windows, not to subsizers
+   int mWindowPositionFlags{ 0 };
+
+   wxSize mWindowSize{};
+
+   wxSize mMinSize{ -1, -1 };
+   bool mHasMinSize{ false };
+   bool mUseBestSize{ false };
+
+   bool mFocused { false };
+   bool mDisabled { false };
+
+};
+
+}
+
 class AUDACITY_DLL_API ShuttleGuiBase /* not final */
 {
 public:
-   ShuttleGuiBase(wxWindow * pParent,teShuttleMode ShuttleMode);
+   ShuttleGuiBase(
+      wxWindow * pParent,
+      teShuttleMode ShuttleMode,
+      bool vertical, // Choose layout direction of topmost level sizer
+      wxSize minSize
+   );
    virtual ~ShuttleGuiBase();
-   void Init();
+   void Init( bool vertical, wxSize minSize );
    void ResetId();
 
 //-- Add functions.  These only add a widget or 2.
@@ -116,27 +271,68 @@ public:
    void AddPrompt(const wxString &Prompt);
    void AddUnits(const wxString &Prompt);
    void AddTitle(const wxString &Prompt);
-   wxWindow * AddWindow(wxWindow * pWindow, int Flags = wxALIGN_CENTRE | wxALL );
+   wxWindow * AddWindow(wxWindow * pWindow);
+
    wxSlider * AddSlider(const wxString &Prompt, int pos, int Max, int Min = 0);
    wxSlider * AddVSlider(const wxString &Prompt, int pos, int Max);
    wxSpinCtrl * AddSpinCtrl(const wxString &Prompt, int Value, int Max, int Min);
    wxTreeCtrl * AddTree();
-   wxRadioButton * AddRadioButton( const wxString & Prompt );
-   wxRadioButton * AddRadioButtonToGroup( const wxString & Prompt);
-   wxButton * AddButton( const wxString & Text, int PositionFlags = wxALIGN_CENTRE );
-   wxBitmapButton * AddBitmapButton(const wxBitmap &Bitmap, int PositionFlags = wxALIGN_CENTRE);
+
+   // Pass the same initValue to the sequence of calls to AddRadioButton and
+   // AddRadioButtonToGroup.
+   // The radio button is filled if selector == initValue
+   // Spoken name of the button defaults to the same as the prompt
+   // (after stripping menu codes):
+   wxRadioButton * AddRadioButton(
+      const wxString & Prompt, int selector = 0, int initValue = 0 );
+   wxRadioButton * AddRadioButtonToGroup(
+      const wxString & Prompt, int selector = 1, int initValue = 0 );
+
+   // Only the last button specified as default (if more than one) will be
+   // Always ORs the flags with wxALL (which affects borders):
+   wxButton * AddButton(
+      const wxString & Text, int PositionFlags = wxALIGN_CENTRE,
+      bool setDefault = false );
+   // Only the last button specified as default (if more than one) will be
+   // Always ORs the flags with wxALL (which affects borders):
+   wxBitmapButton * AddBitmapButton(
+      const wxBitmap &Bitmap, int PositionFlags = wxALIGN_CENTRE,
+      bool setDefault = false );
+   // When PositionFlags is 0, applies wxALL (which affects borders),
+   // and either wxALIGN_CENTER (if bCenter) or else wxEXPAND
    wxStaticText * AddVariableText(const wxString &Str, bool bCenter = false, int PositionFlags = 0);
    wxTextCtrl * AddTextBox(const wxString &Caption, const wxString &Value, const int nChars);
    wxTextCtrl * AddNumericTextBox(const wxString &Caption, const wxString &Value, const int nChars);
    wxTextCtrl * AddTextWindow(const wxString &Value);
-   wxListBox * AddListBox(const wxArrayStringEx &choices, long style = 0);
-   wxListCtrl * AddListControl();
-   wxListCtrl * AddListControlReportMode();
+   wxListBox * AddListBox(const wxArrayStringEx &choices);
+
+   struct ListControlColumn{
+      ListControlColumn(
+         wxString h, int f = wxLIST_FORMAT_LEFT, int w = wxLIST_AUTOSIZE)
+         : heading(h), format(f), width(w)
+      {}
+
+      wxString heading;
+      int format;
+      int width;
+   };
+   wxListCtrl * AddListControl(
+      std::initializer_list<const ListControlColumn> columns = {},
+      long listControlStyles = 0
+   );
+   wxListCtrl * AddListControlReportMode(
+      std::initializer_list<const ListControlColumn> columns = {},
+      long listControlStyles = 0
+   );
+
    wxGrid * AddGrid();
    wxCheckBox * AddCheckBox( const wxString &Prompt, bool Selected);
    wxCheckBox * AddCheckBoxOnRight( const wxString &Prompt, bool Selected);
-   wxComboBox * AddCombo( const wxString &Prompt, const wxString &Selected,const wxArrayStringEx & choices, long style = 0 );
-   wxChoice   * AddChoice( const wxString &Prompt, const wxArrayStringEx &choices, int Selected = -1 );
+   wxComboBox * AddCombo( const wxString &Prompt, const wxString &Selected,const wxArrayStringEx & choices );
+   wxChoice   * AddChoice( const wxString &Prompt,
+      const wxArrayStringEx &choices, int Selected = -1 );
+   wxChoice   * AddChoice( const wxString &Prompt,
+      const wxArrayStringEx &choices, const wxString &selected );
    wxMenuBar  * AddMenuBar( );
    wxMenu     * AddMenu( const wxString & Title );
    void AddIcon( wxBitmap * pBmp);
@@ -169,58 +365,52 @@ public:
 
    wxNotebook * StartNotebook();
    void EndNotebook();
+
+   wxSimplebook * StartSimplebook();
+   void EndSimplebook();
+
+   // Use within any kind of book control:
+   // IDs of notebook pages cannot be chosen by the caller
    wxNotebookPage * StartNotebookPage( const wxString & Name );
    void StartNotebookPage( const wxString & Name, wxNotebookPage * pPage );
+
    void EndNotebookPage();
+
    wxPanel * StartInvisiblePanel();
    void EndInvisiblePanel();
 
-   void StartRadioButtonGroup( const wxString & SettingName );
+   // SettingName is a key in Preferences.
+   void StartRadioButtonGroup( const ChoiceSetting &Setting );
    void EndRadioButtonGroup();
-
-   void StartRadioButtonGroup( const wxString & SettingName, const int iDefaultValue );
-   void StartRadioButtonGroup( const wxString & SettingName, const wxString &DefaultValue );
-
-   void DoDataShuttle( const wxString &Name, WrappedType & WrappedRef );
 
    bool DoStep( int iStep );
    int TranslateToIndex( const wxString &Value, const wxArrayStringEx &Choices );
    wxString TranslateFromIndex( const int nIn, const wxArrayStringEx &Choices );
-   int TranslateToIndex( const int Value, const std::vector<int> &Choices );
-   int TranslateFromIndex( const int nIn, const std::vector<int> &Choices );
 
 //-- Tie functions both add controls and also read/write to them.
-// The ones taking a 'WrappedType' are type-generic and are used by the type specific ones.
 
-   wxTextCtrl * TieTextBox( const wxString &Prompt, WrappedType &  WrappedRef, const int nChars);
    wxTextCtrl * TieTextBox( const wxString &Caption, wxString & Value, const int nChars=0);
    wxTextCtrl * TieTextBox( const wxString &Prompt, int &Selected, const int nChars=0);
    wxTextCtrl * TieTextBox( const wxString &Prompt, double &Value, const int nChars=0);
 
-   wxTextCtrl * TieNumericTextBox( const wxString &Prompt, WrappedType &  WrappedRef, const int nChars);
    wxTextCtrl * TieNumericTextBox( const wxString &Prompt, int &Value, const int nChars=0);
    wxTextCtrl * TieNumericTextBox( const wxString &Prompt, double &Value, const int nChars=0);
 
-   wxCheckBox * TieCheckBox( const wxString &Prompt, WrappedType & WrappedRef );
    wxCheckBox * TieCheckBox( const wxString &Prompt, bool & Var );
-   wxCheckBox * TieCheckBoxOnRight( const wxString & Prompt, WrappedType & WrappedRef );
    wxCheckBox * TieCheckBoxOnRight( const wxString & Prompt, bool & Var );
 
-   wxChoice * TieChoice( const wxString &Prompt, WrappedType & WrappedRef, const wxArrayStringEx &choices );
    wxChoice * TieChoice( const wxString &Prompt, wxString &Selected, const wxArrayStringEx &choices );
    wxChoice * TieChoice( const wxString &Prompt, int &Selected, const wxArrayStringEx &choices );
 
-   wxSlider * TieSlider( const wxString &Prompt, WrappedType & WrappedRef, const int max, const int min = 0 );
    wxSlider * TieSlider( const wxString &Prompt, int &pos, const int max, const int min = 0);
    wxSlider * TieSlider( const wxString &Prompt, double &pos, const double max, const double min = 0.0);
    wxSlider * TieSlider( const wxString &Prompt, float &pos, const float fMin, const float fMax);
    wxSlider * TieVSlider( const wxString &Prompt, float &pos, const float fMin, const float fMax);
 
-   wxRadioButton * TieRadioButton( const wxString & Prompt, WrappedType &WrappedRef);
-   wxRadioButton * TieRadioButton( const wxString &Prompt, const int iValue);
-   wxRadioButton * TieRadioButton( const wxString &Prompt, const wxString &Value);
+   // Must be called between a StartRadioButtonGroup / EndRadioButtonGroup pair,
+   // and as many times as there are values in the enumeration.
+   wxRadioButton * TieRadioButton();
 
-   wxSpinCtrl * TieSpinCtrl( const wxString &Prompt, WrappedType & WrappedRef, const int max, const int min = 0 );
    wxSpinCtrl * TieSpinCtrl( const wxString &Prompt, int &Value, const int max, const int min = 0 );
 
 
@@ -230,76 +420,51 @@ public:
 // so it doesn't need an argument that is writeable.
    virtual wxCheckBox * TieCheckBox(
       const wxString &Prompt,
-      const wxString &SettingName,
-      const bool bDefault);
+      const SettingSpec< bool > &Setting);
    virtual wxCheckBox * TieCheckBoxOnRight(
       const wxString &Prompt,
-      const wxString &SettingName,
-      const bool bDefault);
+      const SettingSpec< bool > &Setting);
 
-   // This one is defined in terms of the next and not virtual
    virtual wxChoice *TieChoice(
       const wxString &Prompt,
-      ChoiceSetting &choiceSetting );
-
-   virtual wxChoice * TieChoice(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const wxString &Default,
-      const wxArrayStringEx &Choices,
-      const wxArrayStringEx & InternalChoices );
-
-   // This overload of TieChoice should no longer be used in Preferences!
-   // Some uses do remain in export settings dialogs.
-   virtual wxChoice * TieChoice(
-      const wxString &Prompt,
-      const wxString &SettingName,
-      const int Default,
-      const wxArrayStringEx & Choices,
-      const std::vector<int> & InternalChoices );
+      const ChoiceSetting &choiceSetting );
 
    // This overload presents what is really a numerical setting as a choice among
-   // commonly used values, but the choice is not exhaustive because there is
-   // also an associated control that allows entry of a user-specified value
-   // that is arbitrary (within some bounds).
+   // commonly used values, but the choice is not necessarily exhaustive.
    // This behaves just like the previous for building dialogs, but the
    // behavior is different when the call is intercepted for purposes of
    // emitting scripting information about Preferences.
    virtual wxChoice * TieNumberAsChoice(
       const wxString &Prompt,
-      const wxString &SettingName,
-      const int Default,
-      const wxArrayStringEx & Choices,
-      const std::vector<int> & InternalChoices );
+      const SettingSpec< int > &Setting,
+      const TranslatableStrings & Choices,
+      const std::vector<int> * pInternalChoices = nullptr,
+      int iNoMatchSelector = 0 );
 
    virtual wxTextCtrl * TieTextBox(
       const wxString &Prompt,
-      const wxString &SettingName,
-      const wxString &Default,
+      const SettingSpec< wxString > &Setting,
+      const int nChars);
+   virtual wxTextCtrl * TieIntegerTextBox(
+      const wxString & Prompt,
+      const SettingSpec< int > &Setting,
       const int nChars);
    virtual wxTextCtrl * TieNumericTextBox(
       const wxString & Prompt,
-      const wxString & SettingName,
-      const double & Default,
+      const SettingSpec< double > &Setting,
       const int nChars);
    virtual wxSlider * TieSlider(
       const wxString & Prompt,
-      const wxString & SettingName,
-      const int iDefault,
+      const SettingSpec< int > &Setting,
       const int max,
       const int min = 0);
    virtual wxSpinCtrl * TieSpinCtrl(
       const wxString &Prompt,
-      const wxString &SettingName,
-      const int Value,
+      const SettingSpec< int > &Setting,
       const int max,
       const int min);
 //-- End of variants.
-   void EnableCtrl( bool bEnable );
-   void SetSizeHints( int minX, int minY );
    void SetBorder( int Border ) {miBorder = Border;};
-   void SetStyle( int Style ) {miStyle = Style;};
-   void SetNoMatchSelector( int iSelector ) {miNoMatchSelector = iSelector;};
    void SetSizerProportion( int iProp ) {miSizerProp = iProp;};
    void SetStretchyCol( int i );
    void SetStretchyRow( int i );
@@ -322,21 +487,21 @@ protected:
    void PushSizer();
    void PopSizer();
 
-   void UpdateSizersCore( bool bPrepend, int Flags );
+   void UpdateSizersCore( bool bPrepend, int Flags, bool prompt = false );
    void UpdateSizers();
    void UpdateSizersC();
    void UpdateSizersAtStart();
 
-   long Style( long Style );
+   long GetStyle( long Style );
 
 private:
-   void SetSizeHints( const wxArrayStringEx & items );
-public:
-   static void SetSizeHints( wxWindow *window, const wxArrayStringEx & items );
+   void DoInsertListColumns(
+      wxListCtrl *pListCtrl,
+      long listControlStyles,
+      std::initializer_list<const ListControlColumn> columns );
 
 protected:
-   wxWindow * mpLastWind;
-   wxWindow * mpDlg;
+   wxWindow *const mpDlg;
    wxSizer * pSizerStack[ nMaxNestedSizers ];
 
    std::unique_ptr<Shuttle> mpShuttle; /*! Controls source/destination of shuttled data.  You can
@@ -345,18 +510,9 @@ protected:
 
    teShuttleMode mShuttleMode;
 
-   // These five are needed to handle radio button groups.
-   wxString mSettingName; /// The setting controlled by a group.
-   int mRadioCount;       /// The index of this radio item.  -1 for none.
-
-   Maybe<WrappedType> mRadioValue;  /// The wrapped value associated with the active radio button.
-   wxString mRadioValueString; /// Unwrapped string value.
-   int mRadioValueInt;         /// Unwrapped integer value.
-
    int miSizerProp;
    int mSizerDepth;
    int miBorder;
-   long miStyle;
    int miProp;
 
    // See UseUpId() for explanation of these three.
@@ -374,6 +530,27 @@ protected:
    wxWindow * mpWind;
    wxMenuBar * mpMenuBar;
    wxMenu * mpMenu;
+
+private:
+   void DoDataShuttle( const wxString &Name, WrappedType & WrappedRef );
+   wxCheckBox * DoTieCheckBoxOnRight( const wxString & Prompt, WrappedType & WrappedRef );
+   wxTextCtrl * DoTieTextBox( const wxString &Prompt, WrappedType &  WrappedRef, const int nChars);
+   wxTextCtrl * DoTieNumericTextBox( const wxString &Prompt, WrappedType &  WrappedRef, const int nChars);
+   wxCheckBox * DoTieCheckBox( const wxString &Prompt, WrappedType & WrappedRef );
+   wxChoice * DoTieChoice( const wxString &Prompt, WrappedType & WrappedRef, const wxArrayStringEx & choices );
+   wxSlider * DoTieSlider( const wxString &Prompt, WrappedType & WrappedRef, const int max, const int min = 0 );
+   wxSpinCtrl * DoTieSpinCtrl( const wxString &Prompt, WrappedType & WrappedRef, const int max, const int min = 0 );
+
+   std::vector<EnumValueSymbol> mRadioSymbols;
+   wxString mRadioSettingName; /// The setting controlled by a group.
+   Maybe<WrappedType> mRadioValue;  /// The wrapped value associated with the active radio button.
+   int mRadioCount;       /// The index of this radio item.  -1 for none.
+   wxString mRadioValueString; /// Unwrapped string value.
+   wxRadioButton * DoAddRadioButton(
+      const wxString &Prompt, int style, int selector, int initValue);
+
+protected:
+   DialogDefinition::Item mItem;
 };
 
 // A rarely used helper function that sets a pointer
@@ -424,18 +601,126 @@ AUDACITY_DLL_API std::unique_ptr<wxSizer> CreateStdButtonSizer( wxWindow *parent
 class AUDACITY_DLL_API ShuttleGui /* not final */ : public ShuttleGuiBase
 {
 public:
-   ShuttleGui(wxWindow * pParent,teShuttleMode ShuttleMode);
+   ShuttleGui(
+      wxWindow * pParent, teShuttleMode ShuttleMode,
+      bool vertical = true, // Choose layout direction of topmost level sizer
+      wxSize minSize = { 250, 100 }
+   );
    ~ShuttleGui(void);
 public:
    ShuttleGui & Optional( bool & bVar );
    ShuttleGui & Id(int id );
+
+   // Only the last item specified as focused (if more than one) will be
+   ShuttleGui & Focus( bool focused = true )
+   {
+      std::move( mItem ).Focus( focused );
+      return *this;
+   }
+
+   ShuttleGui &Disable( bool disabled = true )
+   {
+      std::move( mItem ).Disable( disabled );
+      return *this;
+   }
+
+   ShuttleGui & ToolTip( const TranslatableString &tip )
+   {
+      std::move( mItem ).ToolTip( tip );
+      return *this;
+   }
+
+   // Menu codes in the translation will be stripped
+   ShuttleGui & Name( const TranslatableString &name )
+   {
+      std::move( mItem ).Name( name );
+      return *this;
+   }
+
+   // Append a space, then the translation of the given string, to control name
+   // (not the title or label:  this affects the screen reader behavior)
+   ShuttleGui & NameSuffix( const TranslatableString &suffix )
+   {
+      std::move( mItem ).NameSuffix( suffix );
+      return *this;
+   }
+
+   template<typename Factory>
+   ShuttleGui& Validator( const Factory &f )
+   {
+      if ( GetMode() == eIsCreating )
+         std::move( mItem ).Validator( f );
+      return *this;
+   }
+
+   // This allows further abbreviation of the previous:
+   template<typename V, typename...Args>
+   ShuttleGui& Validator( Args&& ...args )
+   {
+      if ( GetMode() == eIsCreating )
+         std::move( mItem ).Validator<V>( std::forward<Args>(args)... );
+      return *this;
+   }
+
+   // Dispatch events from the control to the dialog
+   // The template type deduction ensures consistency between the argument type
+   // and the event type.  It does not (yet) ensure correctness of the type of
+   // the handler object.
+   template< typename Tag, typename Argument, typename Handler >
+   auto ConnectRoot(
+      wxEventTypeTag<Tag> eventType,
+      void (Handler::*func)(Argument&)
+   )
+        -> typename std::enable_if<
+            std::is_base_of<Argument, Tag>::value,
+            ShuttleGui&
+        >::type
+   {
+      std::move( mItem ).ConnectRoot( eventType, func );
+      return *this;
+   }
+
+   ShuttleGui & Position( int flags )
+   {
+      std::move( mItem ).Position( flags );
+      return *this;
+   }
+
+   ShuttleGui & Size( wxSize size )
+   {
+      std::move( mItem ).Size( size );
+      return *this;
+   }
+
    // Prop() sets the proportion value, defined as in wxSizer::Add().
    ShuttleGui & Prop( int iProp ){ ShuttleGuiBase::Prop(iProp); return *this;}; // Has to be here too, to return a ShuttleGui and not a ShuttleGuiBase.
+
+   ShuttleGui & Style( long iStyle )
+   {
+      std::move( mItem ).Style( iStyle );
+      return *this;
+   }
+
+   ShuttleGui &MinSize() // set best size as min size
+      { std::move( mItem ).MinSize(); return *this; }
+   ShuttleGui &MinSize( wxSize sz )
+      { std::move( mItem ).MinSize( sz ); return *this; }
+
    GuiWaveTrack * AddGuiWaveTrack( const wxString & Name);
    AttachableScrollBar * AddAttachableScrollBar( long style = wxSB_HORIZONTAL );
-   void AddStandardButtons( long buttons = eOkButton | eCancelButton, wxButton *extra = NULL );
-   wxSizerItem * AddSpace( int width, int height );
+
+   // The first of these buttons, if any, that is included will be default:
+   // Apply, Yes, OK
+   void AddStandardButtons(
+      long buttons = eOkButton | eCancelButton, wxWindow *extra = NULL );
+
+   wxSizerItem * AddSpace( int width, int height, int prop = 0 );
    wxSizerItem * AddSpace( int size ) { return AddSpace( size, size ); };
+
+   // Calculate width of a choice control adequate for the items, maybe after
+   // the dialog is created but the items change.
+   static void SetMinSize( wxWindow *window, const wxArrayStringEx & items );
+  // static void SetMinSize( wxWindow *window, const std::vector<int> & items );
 
    teShuttleMode GetMode() { return  mShuttleMode; };
 };

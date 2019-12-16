@@ -119,8 +119,8 @@ void MidiIOPrefs::GetNamesAndLabels() {
       const PmDeviceInfo *info = Pm_GetDeviceInfo(i);
       if (info->output || info->input) { //should always happen
          wxString name = wxSafeConvertMB2WX(info->interf);
-         if ( ! make_iterator_range( mHostNames ).contains( name ) ) {
-            mHostNames.push_back(name);
+         if (!make_iterator_range(mHostNames).contains(TranslatableString{name})) {
+            mHostNames.push_back( TranslatableString{ name } );
             mHostLabels.push_back(name);
          }
       }
@@ -138,11 +138,12 @@ void MidiIOPrefs::PopulateOrExchange( ShuttleGui & S ) {
       {
          S.Id(HostID);
          /* i18n-hint: (noun) */
-         mHost = S.TieChoice(_("&Host:"),
-                             wxT("/MidiIO/Host"),
-                             wxT(""),
-                             mHostNames,
-                             mHostLabels);
+         mHost = S.TieChoice( _("&Host:"),
+            {
+               wxT("/MidiIO/Host"),
+               { ByColumns, mHostNames, mHostLabels }
+            }
+         );
 
          S.AddPrompt(_("Using: PortMidi"));
       }
@@ -157,9 +158,9 @@ void MidiIOPrefs::PopulateOrExchange( ShuttleGui & S ) {
          S.Id(PlayID);
          mPlay = S.AddChoice(_("&Device:"),
                              {} );
-         mLatency = S.TieNumericTextBox(_("MIDI Synth L&atency (ms):"),
-                                        wxT("/MidiIO/SynthLatency"),
-                                        DEFAULT_SYNTH_LATENCY, 3);
+         mLatency = S.TieIntegerTextBox(_("MIDI Synth L&atency (ms):"),
+                                        {wxT("/MidiIO/SynthLatency"),
+                                         DEFAULT_SYNTH_LATENCY}, 3);
       }
       S.EndMultiColumn();
    }
@@ -193,7 +194,7 @@ void MidiIOPrefs::OnHost(wxCommandEvent & WXUNUSED(e))
    wxString itemAtIndex;
    int index = mHost->GetCurrentSelection();
    if (index >= 0 && index < (int)mHostNames.size())
-      itemAtIndex = mHostNames[index];
+      itemAtIndex = mHostLabels[index];
    int nDevices = Pm_CountDevices();
 
    if (nDevices == 0) {
@@ -255,10 +256,9 @@ void MidiIOPrefs::OnHost(wxCommandEvent & WXUNUSED(e))
       mRecord->SetSelection(0);
    }
 #endif
-   ShuttleGui S(this, eIsCreating);
-   S.SetSizeHints(mPlay, playnames);
+   ShuttleGui::SetMinSize(mPlay, playnames);
 #ifdef EXPERIMENTAL_MIDI_IN
-   S.SetSizeHints(mRecord, recordnames);
+   ShuttleGui::SetMinSize(mRecord, recordnames);
 #endif
 //   OnDevice(e);
 }

@@ -73,6 +73,8 @@ effects from this one class.
 #include "../../wxFileNameWrapper.h"
 #include "../../prefs/GUIPrefs.h"
 #include "../../prefs/WaveformSettings.h"
+#include "../../tracks/playabletrack/wavetrack/ui/WaveTrackView.h"
+#include "../../tracks/playabletrack/wavetrack/ui/WaveTrackViewConstants.h"
 #include "../../widgets/NumericTextCtrl.h"
 #include "../../widgets/ProgressDialog.h"
 
@@ -184,7 +186,9 @@ NyquistEffect::NyquistEffect(const wxString &fName)
    }
 
    mFileName = fName;
-   mName = mFileName.GetName();
+   // Use the file name verbatim as effect name.
+   // This is only a default name, overridden if we find a $name line:
+   mName = TranslatableString{ mFileName.GetName() };
    mFileModified = mFileName.GetModificationTime();
    ParseFile();
 
@@ -226,12 +230,15 @@ VendorSymbol NyquistEffect::GetVendor()
 
 wxString NyquistEffect::GetVersion()
 {
-   return mReleaseVersion;
+   // Are Nyquist version strings really supposed to be translatable?
+   // See commit a06e561 which used XO for at least one of them
+   return mReleaseVersion.Translation();
 }
 
 wxString NyquistEffect::GetDescription()
 {
-   return mCopyright;
+   // This should be a translated string, consistent with other effects
+   return mCopyright.Translation();
 }
 
 wxString NyquistEffect::ManualPage()
@@ -542,7 +549,11 @@ bool NyquistEffect::Init()
 
       for ( auto t :
                TrackList::Get( *project ).Selected< const WaveTrack >() ) {
-         if (t->GetDisplay() != WaveTrackViewConstants::Spectrum ||
+         const auto displays = WaveTrackView::Get(*t).GetDisplays();
+         bool hasSpectral =
+            make_iterator_range( displays.begin(), displays.end())
+               .contains( WaveTrackViewConstants::Spectrum );
+         if ( !hasSpectral ||
              !(t->GetSpectrogramSettings().SpectralSelectionEnabled())) {
             bAllowSpectralEditing = false;
             break;
@@ -918,7 +929,7 @@ finish:
 
    if (mDebug && !mRedirectOutput) {
       NyquistOutputDialog dlog(mUIParent, -1,
-                               mName,
+                               mName.Translation(),
                                _("Debug Output: "),
                                mDebugOutput);
       dlog.CentreOnParent();
@@ -1066,15 +1077,27 @@ bool NyquistEffect::ProcessOne()
          [&](const WaveTrack *wt) {
             type = wxT("wave");
             spectralEditp = mCurTrack[0]->GetSpectrogramSettings().SpectralSelectionEnabled()? wxT("T") : wxT("NIL");
-            switch (wt->GetDisplay())
-            {
-            case Waveform:
-               view = (mCurTrack[0]->GetWaveformSettings().scaleType == 0) ? wxT("\"Waveform\"") : wxT("\"Waveform (dB)\"");
-               break;
-            case Spectrum:
-               view = wxT("\"Spectrogram\"");
-               break;
-            default: view = wxT("NIL"); break;
+            // To do: accommodate split views
+            auto displays = WaveTrackView::Get( *wt ).GetDisplays();
+            auto format = [&]( decltype(displays[0]) display ){
+               switch ( display )
+               {
+               case Waveform:
+                  return (mCurTrack[0]->GetWaveformSettings().scaleType == 0) ? wxT("\"Waveform\"") : wxT("\"Waveform (dB)\"");
+               case Spectrum:
+                  return wxT("\"Spectrogram\"");
+               default: return wxT("NIL");
+               }
+            };
+            if (displays.empty())
+               view = wxT("NIL");
+            else if (displays.size() == 1)
+               view = format( displays[0] );
+            else {
+               view = wxT("(list");
+               for ( auto display : displays )
+                  view += wxString(wxT(" ")) + format( display );
+               view += wxT(")");
             }
          },
 #if defined(USE_MIDI)
@@ -1315,7 +1338,7 @@ bool NyquistEffect::ProcessOne()
    // If we're not showing debug window, log errors and warnings:
    if (!mDebugOutput.empty() && !mDebug && !mTrace) {
       /* i18n-hint: An effect "returned" a message.*/
-      wxLogMessage(_("\'%s\' returned:\n%s"), mName, mDebugOutput);
+      wxLogMessage(_("\'%s\' returned:\n%s"), mName.Translation(), mDebugOutput);
    }
 
    // Audacity has no idea how long Nyquist processing will take, but
@@ -1324,10 +1347,10 @@ bool NyquistEffect::ProcessOne()
    // so notify the user that process has completed (bug 558)
    if ((rval != nyx_audio) && ((mCount + mCurNumChannels) == mNumSelectedChannels)) {
       if (mCurNumChannels == 1) {
-         TrackProgress(mCount, 1.0, _("Processing complete."));
+         TrackProgress(mCount, 1.0, XO("Processing complete."));
       }
       else {
-         TrackGroupProgress(mCount, 1.0, _("Processing complete."));
+         TrackGroupProgress(mCount, 1.0, XO("Processing complete."));
       }
    }
 
@@ -1350,8 +1373,10 @@ bool NyquistEffect::ProcessOne()
       // Show error in debug window if trace enabled, otherwise log.
       if (mTrace) {
          /* i18n-hint: "%s" is replaced by name of plug-in.*/
-         mDebugOutput = wxString::Format(_("nyx_error returned from %s.\n"),
-                                         mName.empty()? _("plug-in") : mName) + mDebugOutput;
+         mDebugOutput = wxString::Format(
+            _("nyx_error returned from %s.\n"),
+            mName.empty()? _("plug-in") : mName.Translation()
+         ) + mDebugOutput;
          mDebug = true;
       }
       else {
@@ -1553,9 +1578,10 @@ std::vector<EnumValueSymbol> NyquistEffect::ParseChoice(const wxString & text)
       for (auto &choice : choices) {
          auto label = UnQuote(choice, true, &extra);
          if (extra.empty())
-            results.push_back( { label } );
+            results.push_back( TranslatableString{ label, {} } );
          else
-            results.push_back( { extra, label } );
+            results.push_back(
+               { extra, TranslatableString{ label, {} } } );
       }
    }
    else {
@@ -1860,24 +1886,25 @@ bool NyquistEffect::Parse(
    }
 
    if (len >= 2 && tokens[0] == wxT("name")) {
-      mName = UnQuote(tokens[1]);
+      auto name = UnQuote(tokens[1]);
       // Strip ... from name if it's present, perhaps in third party plug-ins
       // Menu system puts ... back if there are any controls
       // This redundant naming convention must NOT be followed for
       // shipped Nyquist effects with internationalization.  Else the msgid
       // later looked up will lack the ... and will not be found.
-      if (mName.EndsWith(wxT("...")))
-         mName = mName.RemoveLast(3);
+      if (name.EndsWith(wxT("...")))
+         name = name.RemoveLast(3);
+      mName = TranslatableString{ name, {} };
       return true;
    }
 
    if (len >= 2 && tokens[0] == wxT("action")) {
-      mAction = UnQuote(tokens[1]);
+      mAction = TranslatableString{ UnQuote(tokens[1]), {} };
       return true;
    }
 
    if (len >= 2 && tokens[0] == wxT("info")) {
-      mInfo = UnQuote(tokens[1]);
+      mInfo = TranslatableString{ UnQuote(tokens[1]), {} };
       return true;
    }
 
@@ -1927,18 +1954,19 @@ bool NyquistEffect::Parse(
 #endif
 
    if (len >= 2 && tokens[0] == wxT("author")) {
-      mAuthor = UnQuote(tokens[1]);
+      mAuthor = TranslatableString{ UnQuote(tokens[1]), {} };
       return true;
    }
 
    if (len >= 2 && tokens[0] == wxT("release")) {
       // Value must be quoted if the release version string contains spaces.
-      mReleaseVersion = UnQuote(tokens[1]);
+      mReleaseVersion =
+         TranslatableString{ UnQuote(tokens[1]), {} };
       return true;
    }
 
    if (len >= 2 && tokens[0] == wxT("copyright")) {
-      mCopyright = UnQuote(tokens[1]);
+      mCopyright = TranslatableString{ UnQuote(tokens[1]), {} };
       return true;
    }
 
@@ -2563,8 +2591,9 @@ void NyquistEffect::BuildPromptWindow(ShuttleGui & S)
 
       S.StartHorizontalLay(wxEXPAND, 1);
       {
-          mCommandText = S.AddTextWindow(wxT(""));
-          mCommandText->SetMinSize(wxSize(500, 200));
+          mCommandText = S.Focus()
+            .MinSize( { 500, 200 } )
+            .AddTextWindow(wxT(""));
       }
       S.EndHorizontalLay();
 
@@ -2576,14 +2605,12 @@ void NyquistEffect::BuildPromptWindow(ShuttleGui & S)
       S.EndHorizontalLay();
    }
    S.EndVerticalLay();
-
-   mCommandText->SetFocus();
 }
 
 void NyquistEffect::BuildEffectWindow(ShuttleGui & S)
 {
-   S.SetStyle(wxVSCROLL | wxTAB_TRAVERSAL);
-   wxScrolledWindow *scroller = S.StartScroller(2);
+   wxScrolledWindow *scroller = S.Style(wxVSCROLL | wxTAB_TRAVERSAL)
+      .StartScroller(2);
    {
       S.StartMultiColumn(4);
       {
@@ -2604,24 +2631,24 @@ void NyquistEffect::BuildEffectWindow(ShuttleGui & S)
             }
             else
             {
-               wxString prompt = ctrl.name + wxT(":");
+               auto prompt = wxString::Format(_("%s:"), ctrl.name);
                S.AddPrompt(prompt);
 
                if (ctrl.type == NYQ_CTRL_STRING)
                {
                   S.AddSpace(10, 10);
 
-                  wxTextCtrl *item = S.Id(ID_Text + i).AddTextBox( {}, wxT(""), 12);
-                  item->SetValidator(wxGenericValidator(&ctrl.valStr));
-                  item->SetName(prompt);
+                  auto item = S.Id(ID_Text + i)
+                     .Validator<wxGenericValidator>(&ctrl.valStr)
+                     .Name( TranslatableString{ prompt } )
+                     .AddTextBox( {}, wxT(""), 12);
                }
                else if (ctrl.type == NYQ_CTRL_CHOICE)
                {
                   S.AddSpace(10, 10);
 
-                  auto choices =
-                     LocalizedStrings(ctrl.choices.data(), ctrl.choices.size());
-                  S.Id(ID_Choice + i).AddChoice( {}, choices );
+                  S.Id(ID_Choice + i).AddChoice( {},
+                     LocalizedStrings(ctrl.choices.data(), ctrl.choices.size()));
                }
                else if (ctrl.type == NYQ_CTRL_TIME)
                {
@@ -2639,8 +2666,10 @@ void NyquistEffect::BuildEffectWindow(ShuttleGui & S)
                                      ctrl.val,
                                      mProjectRate,
                                      options);
-                  time->SetName(prompt);
-                  S.AddWindow(time, wxALIGN_LEFT | wxALL);
+                  S
+                     .Name( TranslatableString{ prompt } )
+                     .Position(wxALIGN_LEFT | wxALL)
+                     .AddWindow(time);
                }
                else if (ctrl.type == NYQ_CTRL_FILE)
                {
@@ -2662,9 +2691,10 @@ void NyquistEffect::BuildEffectWindow(ShuttleGui & S)
                   }
                   resolveFilePath(ctrl.valStr, defaultExtension);
 
-                  wxTextCtrl *item = S.Id(ID_Text+i).AddTextBox( {}, wxT(""), 40);
+                  wxTextCtrl *item = S.Id(ID_Text+i)
+                     .Name( TranslatableString{ prompt } )
+                     .AddTextBox( {}, wxT(""), 40);
                   item->SetValidator(wxGenericValidator(&ctrl.valStr));
-                  item->SetName(prompt);
 
                   if (ctrl.label.empty())
                      // We'd expect wxFileSelectorPromptStr to already be translated, but apparently not.
@@ -2679,39 +2709,40 @@ void NyquistEffect::BuildEffectWindow(ShuttleGui & S)
                      S.AddSpace(10, 10);
                   }
 
-                  wxTextCtrl *item = S.Id(ID_Text+i).AddTextBox( {}, wxT(""),
-                                                               (ctrl.type == NYQ_CTRL_INT_TEXT ||
-                                                               ctrl.type == NYQ_CTRL_FLOAT_TEXT) ? 25 : 12);
-                  item->SetName(prompt);
-
-                  double range = ctrl.high - ctrl.low;
-
+                  S.Id(ID_Text+i);
                   if (ctrl.type == NYQ_CTRL_FLOAT || ctrl.type == NYQ_CTRL_FLOAT_TEXT)
                   {
-                     // > 12 decimal places can cause rounding errors in display.
-                     FloatingPointValidator<double> vld(12, &ctrl.val);
-                     vld.SetRange(ctrl.low, ctrl.high);
-
-                     // Set number of decimal places
-                     auto style = range < 10 ? NumValidatorStyle::THREE_TRAILING_ZEROES :
-                                 range < 100 ? NumValidatorStyle::TWO_TRAILING_ZEROES :
-                                 NumValidatorStyle::ONE_TRAILING_ZERO;
-                     vld.SetStyle(style);
-
-                     item->SetValidator(vld);
+                     double range = ctrl.high - ctrl.low;
+                     S.Validator<FloatingPointValidator<double>>(
+                        // > 12 decimal places can cause rounding errors in display.
+                        12, &ctrl.val,
+                        // Set number of decimal places
+                        (range < 10
+                           ? NumValidatorStyle::THREE_TRAILING_ZEROES
+                           : range < 100
+                              ? NumValidatorStyle::TWO_TRAILING_ZEROES
+                              : NumValidatorStyle::ONE_TRAILING_ZERO),
+                        ctrl.low, ctrl.high
+                     );
                   }
                   else
                   {
-                     IntegerValidator<double> vld(&ctrl.val);
-                     vld.SetRange((int) ctrl.low, (int) ctrl.high);
-                     item->SetValidator(vld);
+                     S.Validator<IntegerValidator<double>>(
+                        &ctrl.val, NumValidatorStyle::DEFAULT,
+                        (int) ctrl.low, (int) ctrl.high);
                   }
+                  wxTextCtrl *item = S
+                     .Name( TranslatableString{ prompt } )
+                     .AddTextBox( {}, wxT(""),
+                        (ctrl.type == NYQ_CTRL_INT_TEXT ||
+                         ctrl.type == NYQ_CTRL_FLOAT_TEXT) ? 25 : 12);
 
                   if (ctrl.type == NYQ_CTRL_INT || ctrl.type == NYQ_CTRL_FLOAT)
                   {
-                     S.SetStyle(wxSL_HORIZONTAL);
-                     S.Id(ID_Slider + i).AddSlider( {}, 0, ctrl.ticks, 0);
-                     S.SetSizeHints(150, -1);
+                     S.Id(ID_Slider + i)
+                        .Style(wxSL_HORIZONTAL)
+                        .MinSize( { 150, -1 } )
+                        .AddSlider( {}, 0, ctrl.ticks, 0);
                   }
                }
 
@@ -3188,8 +3219,8 @@ void * nyq_reformat_aud_do_response(const wxString & Str) {
    LVAL dst;
    LVAL message;
    LVAL success;
-   wxString Left = Str.BeforeLast('\n').BeforeLast('\n');
-   wxString Right = Str.BeforeLast('\n').AfterLast('\n');
+   wxString Left = Str.BeforeLast('\n').BeforeLast('\n').ToAscii();
+   wxString Right = Str.BeforeLast('\n').AfterLast('\n').ToAscii();
    message = cvstring(Left);
    success = Right.EndsWith("OK") ? s_true : nullptr;
    dst = cons(message, success);

@@ -49,10 +49,6 @@ using WaveTrackConstArray = std::vector < std::shared_ptr < const WaveTrack > >;
 
 using NoteTrackConstArray = std::vector < std::shared_ptr< const NoteTrack > >;
 
-#if defined(USE_MIDI)
-class NoteTrack;
-#endif
-
 class TrackList;
 
 using ListOfTracks = std::list< std::shared_ptr< Track > >;
@@ -70,9 +66,7 @@ enum class TrackKind
 {
    None,
    Wave,
-#if defined(USE_MIDI)
    Note,
-#endif
    Label,
    Time,
    Audio,
@@ -182,8 +176,13 @@ private:
    long mValue;
 };
 
+using AttachedTrackObjects = ClientData::Site<
+   Track, ClientData::Base, ClientData::SkipCopying, std::shared_ptr
+>;
+
 class AUDACITY_DLL_API Track /* not final */
    : public XMLTagHandler
+   , public AttachedTrackObjects
    , public std::enable_shared_from_this<Track> // see SharedPointer()
 {
    friend class TrackList;
@@ -207,6 +206,7 @@ class AUDACITY_DLL_API Track /* not final */
 
  public:
 
+   using AttachedObjects = ::AttachedTrackObjects;
    using ChannelType = XMLValueChecker::ChannelType;
 
    static const auto LeftChannel = XMLValueChecker::LeftChannel;
@@ -335,7 +335,7 @@ private:
 
    bool GetSelected() const { return mSelected; }
 
-   void SetSelected(bool s);
+   virtual void SetSelected(bool s);
 
    // The argument tells whether the last undo history state should be
    // updated for the appearance change
@@ -737,6 +737,8 @@ public:
 
    bool GetMute    () const { return mMute;     }
    bool GetSolo    () const { return mSolo;     }
+   bool GetNotMute () const { return !mMute;     }
+   bool GetNotSolo () const { return !mSolo;     }
    void SetMute    (bool m);
    void SetSolo    (bool s);
 
@@ -1579,6 +1581,8 @@ class AUDACITY_DLL_API TrackFactory final
       , mZoomInfo(zoomInfo)
    {
    }
+   TrackFactory( const TrackFactory & ) PROHIBITED;
+   TrackFactory &operator=( const TrackFactory & ) PROHIBITED;
 
  private:
    const std::shared_ptr<DirManager> mDirManager;

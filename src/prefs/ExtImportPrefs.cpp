@@ -104,8 +104,8 @@ void ExtImportPrefs::PopulateOrExchange(ShuttleGui & S)
    S.StartScroller();
 
    S.TieCheckBox(_("A&ttempt to use filter in OpenFile dialog first"),
-         wxT("/ExtendedImport/OverrideExtendedImportByOpenFileDialogChoice"),
-         true);
+         {wxT("/ExtendedImport/OverrideExtendedImportByOpenFileDialogChoice"),
+          true});
    S.StartStatic(_("Rules to choose import filters"), 1);
    {
       S.SetSizerProportion(1);
@@ -146,16 +146,17 @@ void ExtImportPrefs::PopulateOrExchange(ShuttleGui & S)
             RuleTable->EnableDragCell (true);
             fillRuleTable = true;
          }
-         S.AddWindow(RuleTable, wxEXPAND | wxALL);
+         S.Position(wxEXPAND | wxALL)
+            .AddWindow(RuleTable);
 
-         PluginList = S.Id(EIPPluginList).AddListControl ();
+         PluginList = S.Id(EIPPluginList).AddListControl(
+            { { _("Importer order"), wxLIST_FORMAT_LEFT,
+                wxLIST_AUTOSIZE_USEHEADER } },
+            wxLC_REPORT | wxLC_SINGLE_SEL
+         );
 
          if (fillRuleTable)
          {
-            PluginList->SetSingleStyle (wxLC_REPORT, true);
-            PluginList->SetSingleStyle (wxLC_SINGLE_SEL, true);
-            PluginList->InsertColumn (0, _("Importer order"));
-
             ExtImportPrefsDropTarget *dragtarget2 {};
             PluginList->SetDropTarget (
                dragtarget2 = safenew ExtImportPrefsDropTarget(
@@ -163,8 +164,6 @@ void ExtImportPrefs::PopulateOrExchange(ShuttleGui & S)
                )
             );
             dragtarget2->SetPrefs (this);
-
-            PluginList->SetColumnWidth (0, wxLIST_AUTOSIZE_USEHEADER);
 
             auto &items = Importer::Get().GetImportItems();
             {
@@ -468,7 +467,7 @@ void ExtImportPrefs::DoOnRuleTableSelect (int toprow)
       if (item->filter_objects[i] != NULL)
       {
          PluginList->InsertItem (i + shift,
-               item->filter_objects[i]->GetPluginFormatDescription());
+               item->filter_objects[i]->GetPluginFormatDescription().Translation());
       }
       else
       {

@@ -111,8 +111,9 @@ LV2EffectMeter::~LV2EffectMeter()
 {
 }
 
-void LV2EffectMeter::OnIdle(wxIdleEvent & WXUNUSED(evt))
+void LV2EffectMeter::OnIdle(wxIdleEvent &evt)
 {
+   evt.Skip();
    if (mLastValue != mCtrl.mVal)
    {
       Refresh(false);
@@ -343,7 +344,7 @@ VendorSymbol LV2Effect::GetVendor()
 
    if (vendor.empty())
    {
-      vendor = XO("n/a");
+      return XO("n/a");
    }
 
    return { vendor };
@@ -431,7 +432,22 @@ bool LV2Effect::SetHost(EffectHostInterface *host)
       if (!lilv_port_is_a(mPlug, port, gAudio) &&
           !lilv_port_is_a(mPlug, port, gControl))
       {
-         return false;
+         // There is no event port support in liblilv
+         // The workaround below tests for an event port, used
+         // for example in Calf plug-ins.
+         // We'll allow an event port, even though we won't use it.
+         // Otherwise we return false and reject the plug in.
+
+         LilvNode* name = lilv_port_get_name(mPlug, port);
+         if (!name)
+            return false;
+
+         if (strcmp(lilv_node_as_string(name), "Events") != 0)
+         {
+            lilv_node_free(name);
+            return false;
+         }
+         lilv_node_free(name);
       }
    }
 
@@ -1616,7 +1632,7 @@ bool LV2Effect::BuildPlain()
                   continue;
                }
 
-               wxWindow *item = safenew wxStaticText(w, wxID_ANY, labelText + wxT(":"),
+               wxWindow *item = safenew wxStaticText(w, wxID_ANY, wxString::Format(_("%s:"), labelText),
                   wxDefaultPosition, wxDefaultSize,
                   wxALIGN_RIGHT);
                gridSizer->Add(item, 0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT);
@@ -1813,10 +1829,10 @@ bool LV2Effect::BuildPlain()
    // Try to give the window a sensible default/minimum size
    wxSize sz1 = innerSizer->GetMinSize();
    wxSize sz2 = mParent->GetMinSize();
-   w->SetSizeHints(wxSize(-1, wxMin(sz1.y, sz2.y)));
+   w->SetMinSize( { -1, std::min(sz1.y, sz2.y) } );
 
    // And let the parent reduce to the NEW minimum if possible
-   mParent->SetSizeHints(w->GetMinSize());
+   mParent->SetMinSize(w->GetMinSize());
 
    TransferDataToWindow();
 
@@ -1986,8 +2002,9 @@ void LV2Effect::OnSlider(wxCommandEvent & evt)
    mParent->FindWindow(ID_Texts + p)->GetValidator()->TransferToWindow();
 }
 
-void LV2Effect::OnIdle(wxIdleEvent & WXUNUSED(evt))
+void LV2Effect::OnIdle(wxIdleEvent &evt)
 {
+   evt.Skip();
    if (mIdleFeature)
    {
       mIdleFeature->idle(suil_instance_get_handle(mSuilInstance));

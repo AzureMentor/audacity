@@ -195,8 +195,7 @@ extern "C"
             c->SetCurrentMenu(pMenu);
             c->AddSeparator();
             c->AddItem(wxT("NyqBench"),
-               _("&Nyquist Workbench..."),
-               true,
+               XO("&Nyquist Workbench..."),
                findme,
                static_cast<CommandFunctorPointer>(&NyqBench::ShowNyqBench),
                AudioIONotBusyFlag);
@@ -993,7 +992,7 @@ void NyqBench::PopulateOrExchange(ShuttleGui & S)
 
       S.AddSpace(5, 1);
       S.Prop(true);
-      S.AddWindow(mSplitter, wxEXPAND);
+      S.Position(wxEXPAND).AddWindow(mSplitter);
       S.AddSpace(5, 1);
 
       mSplitter->SetMinSize(wxSize(600, 400));

@@ -78,7 +78,7 @@ private:
    void OnOK(wxCommandEvent& event);
    void OnHelpButtonClick(wxCommandEvent& event);
 
-   wxString GetDisplayDate(wxDateTime & dt);
+   TranslatableString GetDisplayDate(wxDateTime & dt);
    void PopulateOrExchange(ShuttleGui& S);
 
    bool TransferDataFromWindow() override;
@@ -145,9 +145,6 @@ private:
    int m_iAutoExportSubFormat;
    int m_iAutoExportFilterIndex;
    bool m_bProjectAlreadySaved;
-
-   // Variables for After Timer Recording Option
-   wxArrayStringEx m_sTimerAfterCompleteOptionsArray;
 
    DECLARE_EVENT_TABLE()
 };

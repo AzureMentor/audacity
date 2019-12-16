@@ -11,8 +11,10 @@
 #ifndef __AUDACITY_EXPORT__
 #define __AUDACITY_EXPORT__
 
+#include <functional>
 #include <vector>
 #include <wx/filename.h> // member variable
+#include "audacity/Types.h"
 #include "../SampleFormat.h"
 #include "../widgets/wxPanelWrapper.h" // to inherit
 
@@ -32,6 +34,7 @@ class ProgressDialog;
 class Mixer;
 using WaveTrackConstArray = std::vector < std::shared_ptr < const WaveTrack > >;
 enum class ProgressResult : unsigned;
+class wxFileNameWrapper;
 
 class AUDACITY_DLL_API FormatInfo
 {
@@ -44,7 +47,7 @@ class AUDACITY_DLL_API FormatInfo
       ~FormatInfo() {}
 
       wxString mFormat;
-      wxString mDescription;
+      TranslatableString mDescription;
       // wxString mExtension;
       FileExtensions mExtensions;
       wxString mMask;
@@ -64,7 +67,7 @@ public:
 
    int AddFormat();
    void SetFormat(const wxString & format, int index);
-   void SetDescription(const wxString & description, int index);
+   void SetDescription(const TranslatableString & description, int index);
    void AddExtension(const wxString &extension,int index);
    void SetExtensions(FileExtensions extensions, int index);
    void SetMask(const wxString & mask, int index);
@@ -73,7 +76,8 @@ public:
 
    virtual int GetFormatCount();
    virtual wxString GetFormat(int index);
-   virtual wxString GetDescription(int index);
+   TranslatableString GetUntranslatedDescription(int index);
+   wxString GetTranslatedDescription(int index);
    /** @brief Return the (first) file name extension for the sub-format.
     * @param index The sub-format for which the extension is wanted */
    virtual FileExtension GetExtension(int index = 0);
@@ -120,13 +124,15 @@ public:
    virtual ProgressResult Export(AudacityProject *project,
                        std::unique_ptr<ProgressDialog> &pDialog,
                        unsigned channels,
-                       const wxString &fName,
+                       const wxFileNameWrapper &fName,
                        bool selectedOnly,
                        double t0,
                        double t1,
                        MixerSpec *mixerSpec = NULL,
                        const Tags *metadata = NULL,
                        int subformat = 0) = 0;
+
+   virtual unsigned SequenceNumber() const = 0;
 
 protected:
    std::unique_ptr<Mixer> CreateMixer(const TrackList &tracks,
@@ -138,7 +144,9 @@ protected:
 
    // Create or recycle a dialog.
    static void InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
-         const wxString &title, const wxString &message);
+         const TranslatableString &title, const TranslatableString &message);
+   static void InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
+         const wxFileNameWrapper &title, const TranslatableString &message);
 
 private:
    std::vector<FormatInfo> mFormatInfos;
@@ -157,6 +165,18 @@ class  AUDACITY_DLL_API Exporter final : public wxEvtHandler
 {
 public:
 
+   using ExportPluginFactory =
+      std::function< std::unique_ptr< ExportPlugin >() >;
+
+   // Objects of this type are statically constructed in files implementing
+   // subclasses of ExportPlugin
+   // Register factories, not plugin objects themselves, which allows them
+   // to have some fresh state variables each time export begins again
+   // and to compute translated strings for the current locale
+   struct RegisteredExportPlugin{
+      RegisteredExportPlugin( const ExportPluginFactory& );
+   };
+
    static bool DoEditMetadata(AudacityProject &project,
       const wxString &title, const wxString &shortUndoDescription, bool force);
 
@@ -165,7 +185,6 @@ public:
 
    void SetFileDialogTitle( const wxString & DialogTitle );
    void SetDefaultFormat( const wxString & Format ){ mFormatName = Format;};
-   void RegisterPlugin(std::unique_ptr<ExportPlugin> &&plugin);
 
    bool Process(AudacityProject *project, bool selectedOnly,
                 double t0, double t1);

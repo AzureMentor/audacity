@@ -51,6 +51,13 @@ bool TracksSelectedPred( const AudacityProject &project )
    return !range.empty();
 };
 
+// This predicate includes time tracks too.
+bool AnyTracksSelectedPred( const AudacityProject &project )
+{
+   auto range = TrackList::Get( project ).Selected();
+   return !range.empty();
+};
+
 bool AudioIOBusyPred( const AudacityProject &project )
 {
    return AudioIOBase::Get()->IsAudioTokenActive(
@@ -95,6 +102,19 @@ const CommandFlagOptions cutCopyOptions{
    XO("No Audio Selected")
 };
 
+// Noise Reduction has a custom error message, when nothing selected.
+const CommandFlagOptions noiseReductionOptions{
+   []( const wxString &Name ) {
+      wxString format;
+      // i18n-hint: %s will be replaced by the name of an effect, usually 'Noise Reduction'.
+      format = _("Select the audio for %s to use.\n\n1. Select audio that represents noise and use %s to get your 'noise profile'.\n\n2. When you have got your noise profile, select the audio you want to change\nand use %s to change that audio.");
+      return wxString::Format( format, Name, Name, Name );
+   },
+   "Noise_Reduction",
+   XO("No Audio Selected")
+};
+
+
 const ReservedCommandFlag
    // The sequence of these definitions has a minor significance in determining
    // which user error message has precedence if more than one might apply, so
@@ -110,7 +130,7 @@ const ReservedCommandFlag
       CommandFlagOptions{ []( const wxString& ) { return
          // This reason will not be shown, because options that require it will be greyed out.
          _("You can only do this when playing and recording are\nstopped. (Pausing is not sufficient.)");
-      } }
+      } ,"FAQ:Errors:Audio Must Be Stopped"}
       .QuickTest()
       .Priority( 1 )
    }, //lll
@@ -126,8 +146,12 @@ const ReservedCommandFlag
       { []( const wxString& ) { return
          // This reason will not be shown, because the stereo-to-mono is greyed out if not allowed.
          _("You must first select some stereo audio to perform this\naction. (You cannot use this with mono.)");
-      } }
+      } ,"Audacity_Selection"}
    },  //lda
+   NoiseReductionTimeSelectedFlag{
+      TimeSelectedPred,
+      noiseReductionOptions
+   },
    TimeSelectedFlag{
       TimeSelectedPred,
       cutCopyOptions
@@ -138,7 +162,7 @@ const ReservedCommandFlag
       },
       { []( const wxString& ) { return
          _("You must first select some audio to perform this action.\n(Selecting other kinds of track won't work.)");
-      } }
+      } ,"Audacity_Selection"}
    },
    TracksExistFlag{
       [](const AudacityProject &project){
@@ -147,12 +171,20 @@ const ReservedCommandFlag
       CommandFlagOptions{}.DisableDefaultMessage()
    },
    TracksSelectedFlag{
-      TracksSelectedPred,
+      TracksSelectedPred, // exclude TimeTracks
       { []( const wxString &Name ){ return wxString::Format(
          // i18n-hint: %s will be replaced by the name of an action, such as "Remove Tracks".
          _("\"%s\" requires one or more tracks to be selected."),
          Name
-      ); } }
+      ); },"Audacity_Selection" }
+   },
+   AnyTracksSelectedFlag{
+      AnyTracksSelectedPred, // Allow TimeTracks
+      { []( const wxString &Name ){ return wxString::Format(
+         // i18n-hint: %s will be replaced by the name of an action, such as "Remove Tracks".
+         _("\"%s\" requires one or more tracks to be selected."),
+         Name
+      ); },"Audacity_Selection" }
    },
    TrackPanelHasFocus{
       [](const AudacityProject &project){
@@ -178,16 +210,7 @@ const ReservedCommandFlag
             gAudioIO->GetNumCaptureChannels() > 0
          );
       }
-   },
-   HasWaveDataFlag{
-      [](const AudacityProject &project){
-         auto range = TrackList::Get( project ).Any<const WaveTrack>()
-            + [](const WaveTrack *pTrack){
-               return pTrack->GetEndTime() > pTrack->GetStartTime();
-            };
-         return !range.empty();
-      }
-   }; // jkc
+   };
 
 const ReservedCommandFlag
    LabelTracksExistFlag{
@@ -276,6 +299,7 @@ const ReservedCommandFlag
          return !TrackList::Get( project ).Any<const WaveTrack>().empty();
       }
    },
+#ifdef USE_MIDI
    NoteTracksExistFlag{
       [](const AudacityProject &project){
          return !TrackList::Get( project ).Any<const NoteTrack>().empty();
@@ -286,6 +310,7 @@ const ReservedCommandFlag
          return !TrackList::Get( project ).Selected<const NoteTrack>().empty();
       }
    },  //gsw
+#endif
    IsNotSyncLockedFlag{
       [](const AudacityProject &project){
          return !ProjectSettings::Get( project ).IsSyncLocked();
@@ -331,9 +356,11 @@ const ReservedCommandFlag
       [](const AudacityProject &project){
          auto &tracks = TrackList::Get( project );
          return
+#ifdef USE_MIDI
             !tracks.Selected<const NoteTrack>().empty()
             // even if not EXPERIMENTAL_MIDI_OUT
          ||
+#endif
             !tracks.Selected<const WaveTrack>().empty()
          ;
       }

@@ -116,7 +116,7 @@ void GroupItem::AppendOne( BaseItemPtr&& ptr )
 }
 GroupItem::~GroupItem() {}
 
-MenuItem::MenuItem( const wxString &title_, BaseItemPtrs &&items_ )
+MenuItem::MenuItem( const TranslatableString &title_, BaseItemPtrs &&items_ )
 : GroupItem{ std::move( items_ ) }, title{ title_ }
 {
    wxASSERT( !title.empty() );
@@ -133,13 +133,12 @@ ConditionalGroupItem::~ConditionalGroupItem() {}
 SeparatorItem::~SeparatorItem() {}
 
 CommandItem::CommandItem(const CommandID &name_,
-         const wxString &label_in_,
-         bool hasDialog_,
+         const TranslatableString &label_in_,
          CommandHandlerFinder finder_,
          CommandFunctorPointer callback_,
          CommandFlag flags_,
          const CommandManager::Options &options_)
-: name{ name_ }, label_in{ label_in_ }, hasDialog{ hasDialog_ }
+: name{ name_ }, label_in{ label_in_ }
 , finder{ finder_ }, callback{ callback_ }
 , flags{ flags_ }, options{ options_ }
 {}
@@ -193,7 +192,7 @@ void VisitItem( AudacityProject &project, MenuTable::BaseItem *pItem )
    if (const auto pCommand =
        dynamic_cast<CommandItem*>( pItem )) {
       manager.AddItem(
-         pCommand->name, pCommand->label_in, pCommand->hasDialog,
+         pCommand->name, pCommand->label_in,
          pCommand->finder, pCommand->callback,
          pCommand->flags, pCommand->options
       );
@@ -305,7 +304,6 @@ void MenuCreator::CreateMenusAndCommands(AudacityProject &project)
    wxASSERT(menubar);
 
    VisitItem( project, menuTree.get() );
-
    GetProjectFrame( project ).SetMenuBar(menubar.release());
 
    mLastFlags = AlwaysEnabledFlag;
@@ -419,7 +417,7 @@ ReservedCommandFlag::ReservedCommandFlag(
    Options().emplace_back( options );
 }
 
-CommandFlag MenuManager::GetUpdateFlags( bool checkActive )
+CommandFlag MenuManager::GetUpdateFlags( bool checkActive ) const
 {
    // This method determines all of the flags that determine whether
    // certain menu items and commands should be enabled or disabled,
@@ -584,11 +582,11 @@ void MenuManager::UpdateMenus( bool checkActive )
    //to actually do the 'select all' to make the command valid.
 
    for ( const auto &enabler : Enablers() ) {
+      auto actual = enabler.actualFlags();
       if (
-         enabler.applicable( project ) &&
-         (flags & enabler.actualFlags) == enabler.actualFlags
+         enabler.applicable( project ) && (flags & actual) == actual
       )
-         flags2 |= enabler.possibleFlags;
+         flags2 |= enabler.possibleFlags();
    }
 
    auto &commandManager = CommandManager::Get( project );
@@ -645,7 +643,6 @@ bool MenuManager::TryToMakeActionAllowed(
    CommandFlag & flags, CommandFlag flagsRqd )
 {
    auto &project = mProject;
-   bool bAllowed;
 
    if( flags.none() )
       flags = GetUpdateFlags();
@@ -655,13 +652,14 @@ bool MenuManager::TryToMakeActionAllowed(
    auto iter = enablers.begin(), end = enablers.end();
    while ((flags & flagsRqd) != flagsRqd && iter != end) {
       const auto &enabler = *iter;
+      auto actual = enabler.actualFlags();
       auto MissingFlags = (~flags & flagsRqd);
       if (
          // Do we have the right precondition?
-         (flags & enabler.actualFlags) == enabler.actualFlags
+         (flags & actual) == actual
       &&
          // Can we get the condition we need?
-         (MissingFlags & enabler.possibleFlags) == MissingFlags
+         (MissingFlags & enabler.possibleFlags()).any()
       ) {
          // Then try the function
          enabler.tryEnable( project, flagsRqd );
@@ -738,7 +736,7 @@ void MenuManager::TellUserWhyDisallowed(
       return;
 
    // Message is already translated but title is not yet
-   auto title = ::GetCustomTranslation( untranslatedTitle );
+   auto title = untranslatedTitle.Translation();
 
    // Does not have the warning icon...
    ShowErrorDialog(

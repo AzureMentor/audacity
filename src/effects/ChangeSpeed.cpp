@@ -53,11 +53,11 @@ enum kVinyl
    nVinyl
 };
 
-static const wxChar *kVinylStrings[nVinyl] =
+static const TranslatableString kVinylStrings[nVinyl] =
 {
-   wxT("33\u2153"),
-   wxT("45"),
-   wxT("78"),
+   XO("33\u2153"),
+   XO("45"),
+   XO("78"),
    /* i18n-hint: n/a is an English abbreviation meaning "not applicable". */
    XO("n/a"),
 };
@@ -296,6 +296,12 @@ void EffectChangeSpeed::PopulateOrExchange(ShuttleGui & S)
    }
    GetPrivateConfig(GetCurrentSettingsGroup(), wxT("VinylChoice"), mFromVinyl, mFromVinyl);
 
+   wxASSERT(nVinyl == WXSIZEOF(kVinylStrings));
+
+   wxArrayStringEx vinylChoices;
+   for (int i = 0; i < nVinyl; i++)
+      vinylChoices.push_back(kVinylStrings[i].Translation());
+
    S.SetBorder(5);
 
    S.StartVerticalLay(0);
@@ -307,27 +313,31 @@ void EffectChangeSpeed::PopulateOrExchange(ShuttleGui & S)
       // Speed multiplier and percent change controls.
       S.StartMultiColumn(4, wxCENTER);
       {
-         FloatingPointValidator<double> vldMultiplier(3, &mMultiplier, NumValidatorStyle::THREE_TRAILING_ZEROES);
-         vldMultiplier.SetRange(MIN_Percentage / 100.0, ((MAX_Percentage / 100.0) + 1));
-         mpTextCtrl_Multiplier =
-            S.Id(ID_Multiplier).AddTextBox(_("Speed Multiplier:"), wxT(""), 12);
-         mpTextCtrl_Multiplier->SetValidator(vldMultiplier);
+         mpTextCtrl_Multiplier = S.Id(ID_Multiplier)
+            .Validator<FloatingPointValidator<double>>(
+               3, &mMultiplier,
+               NumValidatorStyle::THREE_TRAILING_ZEROES,
+               MIN_Percentage / 100.0, ((MAX_Percentage / 100.0) + 1)
+            )
+            .AddTextBox(_("Speed Multiplier:"), wxT(""), 12);
 
-         FloatingPointValidator<double> vldPercentage(3, &m_PercentChange, NumValidatorStyle::THREE_TRAILING_ZEROES);
-         vldPercentage.SetRange(MIN_Percentage, MAX_Percentage);
-         mpTextCtrl_PercentChange =
-            S.Id(ID_PercentChange).AddTextBox(_("Percent Change:"), wxT(""), 12);
-         mpTextCtrl_PercentChange->SetValidator(vldPercentage);
+         mpTextCtrl_PercentChange = S.Id(ID_PercentChange)
+            .Validator<FloatingPointValidator<double>>(
+               3, &m_PercentChange,
+               NumValidatorStyle::THREE_TRAILING_ZEROES,
+               MIN_Percentage, MAX_Percentage
+            )
+            .AddTextBox(_("Percent Change:"), wxT(""), 12);
       }
       S.EndMultiColumn();
 
       // Percent change slider.
       S.StartHorizontalLay(wxEXPAND);
       {
-         S.SetStyle(wxSL_HORIZONTAL);
-         mpSlider_PercentChange =
-            S.Id(ID_PercentChange).AddSlider( {}, 0, (int)kSliderMax, (int)MIN_Percentage);
-         mpSlider_PercentChange->SetName(_("Percent Change"));
+         mpSlider_PercentChange = S.Id(ID_PercentChange)
+            .Name(XO("Percent Change"))
+            .Style(wxSL_HORIZONTAL)
+            .AddSlider( {}, 0, (int)kSliderMax, (int)MIN_Percentage);
       }
       S.EndHorizontalLay();
 
@@ -337,30 +347,17 @@ void EffectChangeSpeed::PopulateOrExchange(ShuttleGui & S)
          /* i18n-hint: "rpm" is an English abbreviation meaning "revolutions per minute". */
          S.AddUnits(_("Standard Vinyl rpm:"));
 
-         wxASSERT(nVinyl == WXSIZEOF(kVinylStrings));
+         mpChoice_FromVinyl = S.Id(ID_FromVinyl)
+            .Name(XO("From rpm"))
+            .MinSize( { 100, -1 } )
+            /* i18n-hint: changing a quantity "from" one value "to" another */
+            .AddChoice(_("from"), vinylChoices);
 
-         wxArrayStringEx vinylChoices;
-         for (int i = 0; i < nVinyl; i++)
-         {
-            if (i == kVinyl_NA)
-            {
-               vinylChoices.push_back(wxGetTranslation(kVinylStrings[i]));
-            }
-            else
-            {
-               vinylChoices.push_back(kVinylStrings[i]);
-            }
-         }
-
-         mpChoice_FromVinyl =
-            S.Id(ID_FromVinyl).AddChoice(_("from"), vinylChoices);
-         mpChoice_FromVinyl->SetName(_("From rpm"));
-         mpChoice_FromVinyl->SetSizeHints(100, -1);
-
-         mpChoice_ToVinyl =
-            S.Id(ID_ToVinyl).AddChoice(_("to"), vinylChoices);
-         mpChoice_ToVinyl->SetName(_("To rpm"));
-         mpChoice_ToVinyl->SetSizeHints(100, -1);
+         mpChoice_ToVinyl = S.Id(ID_ToVinyl)
+            /* i18n-hint: changing a quantity "from" one value "to" another */
+            .Name(XO("To rpm"))
+            .MinSize( { 100, -1 } )
+            .AddChoice(_("to"), vinylChoices);
       }
       S.EndMultiColumn();
 
@@ -381,9 +378,11 @@ void EffectChangeSpeed::PopulateOrExchange(ShuttleGui & S)
                                   .ReadOnly(true)
                                   .MenuEnabled(false));
 
-            mpFromLengthCtrl->SetName(_("from"));
-            mpFromLengthCtrl->SetToolTip(_("Current length of selection."));
-            S.AddWindow(mpFromLengthCtrl, wxALIGN_LEFT);
+            S.ToolTip(XO("Current length of selection."))
+               /* i18n-hint: changing a quantity "from" one value "to" another */
+               .Name(XO("from"))
+               .Position(wxALIGN_LEFT)
+               .AddWindow(mpFromLengthCtrl);
 
             S.AddPrompt(_("New Length:"));
 
@@ -394,8 +393,10 @@ void EffectChangeSpeed::PopulateOrExchange(ShuttleGui & S)
                                  mToLength,
                                  mProjectRate);
 
-            mpToLengthCtrl->SetName(_("to"));
-            S.AddWindow(mpToLengthCtrl, wxALIGN_LEFT);
+            /* i18n-hint: changing a quantity "from" one value "to" another */
+            S.Name(XO("to"))
+               .Position(wxALIGN_LEFT)
+               .AddWindow(mpToLengthCtrl);
          }
          S.EndMultiColumn();
       }

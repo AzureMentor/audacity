@@ -37,6 +37,7 @@
 #include "Prefs.h" // for RTL_WORKAROUND
 #include "Project.h"
 #include "ProjectAudioIO.h"
+#include "ProjectAudioManager.h"
 #include "ProjectHistory.h"
 #include "ProjectSettings.h"
 #include "ProjectWindow.h"
@@ -58,7 +59,6 @@
 #endif
 
 #include "commands/CommandManager.h"
-#include "toolbars/ControlToolBar.h"
 
 // class MixerTrackSlider
 
@@ -360,7 +360,7 @@ void MixerTrackCluster::UpdatePrefs()
 {
    this->SetBackgroundColour( theTheme.Colour( clrMedium ) );
    mStaticText_TrackName->SetForegroundColour(theTheme.Colour(clrTrackPanelText));
-   HandleResize(); // in case prefs "/GUI/Solo" changed
+   HandleResize(); // in case TracksBehaviorsSolo changed
 }
 #endif
 
@@ -636,16 +636,14 @@ void MixerTrackCluster::UpdateMeter(const double t0, const double t1)
    {
       //vvv Need to apply envelope, too? See Mixer::MixSameRate.
       float gain = pTrack->GetChannelGain(0);
-      if (gain < 1.0)
-         for (unsigned int index = 0; index < nFrames; index++)
-            meterFloatsArray[2 * index] *= gain;
+      for (unsigned int index = 0; index < nFrames; index++)
+         meterFloatsArray[2 * index] *= gain;
       if (GetRight())
          gain = GetRight()->GetChannelGain(1);
       else
          gain = pTrack->GetChannelGain(1);
-      if (gain < 1.0)
-         for (unsigned int index = 0; index < nFrames; index++)
-            meterFloatsArray[(2 * index) + 1] *= gain;
+      for (unsigned int index = 0; index < nFrames; index++)
+         meterFloatsArray[(2 * index) + 1] *= gain;
       // Clip to [-1.0, 1.0] range.
       for (unsigned int index = 0; index < 2 * nFrames; index++)
          if (meterFloatsArray[index] < -1.0)
@@ -1353,7 +1351,7 @@ void MixerBoard::OnTimer(wxCommandEvent &event)
       auto gAudioIO = AudioIOBase::Get();
       UpdateMeters(
          gAudioIO->GetStreamTime(),
-         (ControlToolBar::Get( *mProject ).GetLastPlayMode()
+         (ProjectAudioManager::Get( *mProject ).GetLastPlayMode()
             == PlayMode::loopedPlay)
       );
    }

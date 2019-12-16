@@ -111,11 +111,11 @@ public:
    // Importer plugins only
 
    const wxString & GetImporterIdentifier() const;
-   const wxString & GetImporterFilterDescription() const;
+   const TranslatableString & GetImporterFilterDescription() const;
    const FileExtensions & GetImporterExtensions() const;
 
    void SetImporterIdentifier(const wxString & identifier);
-   void SetImporterFilterDescription(const wxString & filterDesc);
+   void SetImporterFilterDescription(const TranslatableString & filterDesc);
    void SetImporterExtensions(FileExtensions extensions);
 
 private:
@@ -153,7 +153,6 @@ private:
    // Importers
 
    wxString mImporterIdentifier;
-   wxString mImporterFilterDesc;
    FileExtensions mImporterExtensions;
 };
 
@@ -172,6 +171,9 @@ class PluginRegistrationDialog;
 class PluginManager final : public PluginManagerInterface
 {
 public:
+
+   RegistryPath GetPluginEnabledSetting( const PluginID &ID );
+   RegistryPath GetPluginEnabledSetting( const PluginDescriptor &desc );
 
    // PluginManagerInterface implementation
 

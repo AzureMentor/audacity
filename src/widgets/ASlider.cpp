@@ -22,7 +22,7 @@ have a window permanently associated with it.
 \class SliderDialog
 \brief Pop up dialog used with an LWSlider.
 
-\class TipPanel
+\class TipWindow
 \brief A wxPopupWindow used to give the numerical value of an LWSlider
 or ASlider.
 
@@ -58,11 +58,10 @@ or ASlider.
 #include <wx/popupwin.h>
 #include <wx/window.h>
 
-#include "Ruler.h"
-
 #include "../AColor.h"
 #include "../ImageManipulation.h"
 #include "../Project.h"
+#include "../ProjectStatus.h"
 #include "../ShuttleGui.h"
 
 #include "../AllThemeResources.h"
@@ -151,14 +150,14 @@ const int sliderFontSize = 12;
 class wxArrayString;
 
 //
-// TipPanel
+// TipWindow
 //
 
-class TipPanel final : public wxFrame
+class TipWindow final : public wxFrame
 {
  public:
-   TipPanel(wxWindow *parent, const wxArrayString & labels);
-   virtual ~TipPanel() {}
+   TipWindow(wxWindow *parent, const wxArrayString & labels);
+   virtual ~TipWindow() {}
 
    wxSize GetSize() const;
    void SetPos(const wxPoint & pos);
@@ -178,14 +177,14 @@ private:
    DECLARE_EVENT_TABLE()
 };
 
-BEGIN_EVENT_TABLE(TipPanel, wxFrame)
-   EVT_PAINT(TipPanel::OnPaint)
+BEGIN_EVENT_TABLE(TipWindow, wxFrame)
+   EVT_PAINT(TipWindow::OnPaint)
 #if defined(__WXGTK__)
-   EVT_WINDOW_CREATE(TipPanel::OnCreate)
+   EVT_WINDOW_CREATE(TipWindow::OnCreate)
 #endif
 END_EVENT_TABLE()
 
-TipPanel::TipPanel(wxWindow *parent, const wxArrayString & labels)
+TipWindow::TipWindow(wxWindow *parent, const wxArrayString & labels)
 :  wxFrame(parent, wxID_ANY, wxString{}, wxDefaultPosition, wxDefaultSize,
            wxFRAME_SHAPED | wxFRAME_FLOAT_ON_PARENT)
 {
@@ -210,12 +209,12 @@ TipPanel::TipPanel(wxWindow *parent, const wxArrayString & labels)
 #endif
 }
 
-wxSize TipPanel::GetSize() const
+wxSize TipWindow::GetSize() const
 {
    return wxSize(mWidth, mHeight);
 }
 
-void TipPanel::SetPos(const wxPoint & pos)
+void TipWindow::SetPos(const wxPoint & pos)
 {
 #if defined(__WXGTK__)
    SetSize(pos.x, pos.y, wxDefaultCoord, wxDefaultCoord);
@@ -224,12 +223,12 @@ void TipPanel::SetPos(const wxPoint & pos)
 #endif
 }
 
-void TipPanel::SetLabel(const wxString & label)
+void TipWindow::SetLabel(const wxString & label)
 {
    mLabel = label;
 }
 
-void TipPanel::OnPaint(wxPaintEvent & WXUNUSED(event))
+void TipWindow::OnPaint(wxPaintEvent & WXUNUSED(event))
 {
    wxAutoBufferedPaintDC dc(this);
 
@@ -246,7 +245,7 @@ void TipPanel::OnPaint(wxPaintEvent & WXUNUSED(event))
 }
 
 #if defined(__WXGTK__)
-void TipPanel::OnCreate(wxWindowCreateEvent & WXUNUSED(event))
+void TipWindow::OnCreate(wxWindowCreateEvent & WXUNUSED(event))
 {
    wxGraphicsPath path = wxGraphicsRenderer::GetDefaultRenderer()->CreatePath();
    path.AddRoundedRectangle(0, 0, mWidth, mHeight, 5);
@@ -281,19 +280,18 @@ SliderDialog::SliderDialog(wxWindow * parent, wxWindowID id,
 
    S.StartVerticalLay();
    {
-      mTextCtrl = S.AddTextBox( {},
-                               wxEmptyString,
-                               15);
-      mTextCtrl->SetValidator(wxTextValidator(wxFILTER_NUMERIC));
+      mTextCtrl = S.Validator<wxTextValidator>(wxFILTER_NUMERIC)
+         .AddTextBox( {}, wxEmptyString, 15);
 
-      mSlider = safenew ASlider(this,
+      mSlider = safenew ASlider(S.GetParent(),
                             wxID_ANY,
                             title,
                             wxDefaultPosition,
                             size,
                             ASlider::Options{}
                                .Style( style ).Line( line ).Page( page ) );
-      S.AddWindow(mSlider, wxEXPAND);
+      S.Position(wxEXPAND)
+         .AddWindow(mSlider);
    }
    S.EndVerticalLay();
 
@@ -896,7 +894,7 @@ void LWSlider::ShowTip(bool show)
 
 void LWSlider::CreatePopWin()
 {
-   mTipPanel = std::make_unique<TipPanel>(mParent, GetWidestTips());
+   mTipPanel = std::make_unique<TipWindow>(mParent, GetWidestTips());
 }
 
 void LWSlider::SetPopWinPosition()
@@ -1092,7 +1090,7 @@ void LWSlider::OnMouseEvent(wxMouseEvent & event)
    {
       // Display the tooltip in the status bar
       wxString tip = GetTip(mCurrentValue);
-      GetActiveProject()->SetStatus(tip);
+      ProjectStatus::Get( *GetActiveProject() ).Set(tip);
       Refresh();
    }
    else if (event.Leaving())
@@ -1101,7 +1099,7 @@ void LWSlider::OnMouseEvent(wxMouseEvent & event)
       {
          ShowTip(false);
       }
-      GetActiveProject()->SetStatus(wxT(""));
+      ProjectStatus::Get( *GetActiveProject() ).Set(wxT(""));
       Refresh();
    }
 

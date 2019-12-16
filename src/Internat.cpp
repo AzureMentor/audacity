@@ -240,7 +240,7 @@ bool Internat::SanitiseFilename(wxString &name, const wxString &sub)
    // Special Mac stuff
    // '/' is permitted in file names as seen in dialogs, even though it is
    // the path separator.  The "real" filename as seen in the terminal has ':'.
-   // Do NOT return true if this is the only subsitution.
+   // Do NOT return true if this is the only substitution.
    name.Replace(wxT("/"), wxT(":"));
 #endif
 
@@ -289,4 +289,84 @@ std::vector< Identifier > Identifier::split( wxChar separator ) const
 {
    auto strings = ::wxSplit( value, separator );
    return { strings.begin(), strings.end() };
+}
+
+const wxChar *const TranslatableString::NullContextName = wxT("*");
+
+const TranslatableString::Formatter
+TranslatableString::NullContextFormatter {
+   [](const wxString & str, TranslatableString::Request request) -> wxString {
+      switch ( request ) {
+         case Request::Context:
+            return NullContextName;
+         case Request::Format:
+         case Request::DebugFormat:
+         default:
+            return str;
+      }
+   }
+};
+
+bool TranslatableString::IsVerbatim() const
+{
+   return DoGetContext( mFormatter ) == NullContextName;
+}
+
+wxString TranslatableString::DoGetContext( const Formatter &formatter )
+{
+   return formatter ? formatter( {}, Request::Context ) : wxString{};
+}
+
+wxString TranslatableString::DoSubstitute(
+   const Formatter &formatter, const wxString &format, bool debug )
+{
+   return formatter
+      ? formatter( format, debug ? Request::DebugFormat : Request::Format )
+      : // come here for most translatable strings, which have no formatting
+         ( debug ? format : wxGetTranslation( format ) );
+}
+
+wxString TranslatableString::DoChooseFormat(
+   const Formatter &formatter,
+   const wxString &singular, const wxString &plural, unsigned nn, bool debug )
+{
+   // come here for translatable strings that choose among forms by number;
+   // if not debugging, then two keys are passed to an overload of
+   // wxGetTranslation, and also a number.
+   // Some languages might choose among more or fewer than two forms
+   // (e.g. Arabic has duals and Russian has complicated declension rules)
+   wxString context;
+   return ( debug || NullContextName == (context = DoGetContext(formatter)) )
+      ? ( nn == 1 ? singular : plural )
+      : wxGetTranslation(
+            singular, plural, nn
+            // , wxString{}
+            // , context
+         );
+}
+
+TranslatableString &TranslatableString::Join(
+   const TranslatableString arg, const wxString &separator ) &
+{
+   auto prevFormatter = mFormatter;
+   mFormatter =
+   [prevFormatter,
+    arg /* = std::move( arg ) */,
+    separator](const wxString &str, Request request)
+      -> wxString {
+      switch ( request ) {
+         case Request::Context:
+            return TranslatableString::DoGetContext( prevFormatter );
+         case Request::Format:
+         case Request::DebugFormat:
+         default: {
+            bool debug = request == Request::DebugFormat;
+            return
+               TranslatableString::DoSubstitute( prevFormatter, str, debug )
+                  + separator
+                  + arg.DoFormat( debug );
+         }
+      }
+   };
+   return *this;
 }

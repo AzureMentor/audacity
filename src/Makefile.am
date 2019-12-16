@@ -238,6 +238,8 @@ audacity_SOURCES = \
 	ProjectSelectionManager.h \
 	ProjectSettings.cpp \
 	ProjectSettings.h \
+	ProjectStatus.cpp \
+	ProjectStatus.h \
 	ProjectWindow.cpp \
 	ProjectWindow.h \
 	RealFFTf.cpp \
@@ -425,6 +427,8 @@ audacity_SOURCES = \
 	effects/Distortion.h \
 	effects/DtmfGen.cpp \
 	effects/DtmfGen.h \
+	effects/EBUR128.cpp \
+	effects/EBUR128.h \
 	effects/Echo.cpp \
 	effects/Echo.h \
 	effects/Effect.cpp \
@@ -447,6 +451,8 @@ audacity_SOURCES = \
 	effects/Invert.h \
 	effects/LoadEffects.cpp \
 	effects/LoadEffects.h \
+	effects/Loudness.cpp \
+	effects/Loudness.h \
 	effects/Noise.cpp \
 	effects/Noise.h \
 	effects/NoiseReduction.cpp \
@@ -497,19 +503,14 @@ audacity_SOURCES = \
 	export/Export.cpp \
 	export/Export.h \
 	export/ExportCL.cpp \
-	export/ExportCL.h \
 	export/ExportFLAC.cpp \
-	export/ExportFLAC.h \
 	export/ExportMP2.cpp \
-	export/ExportMP2.h \
 	export/ExportMP3.cpp \
 	export/ExportMP3.h \
 	export/ExportMultiple.cpp \
 	export/ExportMultiple.h \
 	export/ExportOGG.cpp \
-	export/ExportOGG.h \
 	export/ExportPCM.cpp \
-	export/ExportPCM.h \
 	import/Import.cpp \
 	import/Import.h \
 	import/ImportFLAC.cpp \
@@ -670,6 +671,18 @@ audacity_SOURCES = \
 	tracks/playabletrack/wavetrack/ui/CutlineHandle.h \
 	tracks/playabletrack/wavetrack/ui/SampleHandle.cpp \
 	tracks/playabletrack/wavetrack/ui/SampleHandle.h \
+	tracks/playabletrack/wavetrack/ui/SpectrumView.cpp \
+	tracks/playabletrack/wavetrack/ui/SpectrumView.h \
+	tracks/playabletrack/wavetrack/ui/SpectrumVRulerControls.cpp \
+	tracks/playabletrack/wavetrack/ui/SpectrumVRulerControls.h \
+	tracks/playabletrack/wavetrack/ui/SpectrumVZoomHandle.cpp \
+	tracks/playabletrack/wavetrack/ui/SpectrumVZoomHandle.h \
+	tracks/playabletrack/wavetrack/ui/WaveformView.cpp \
+	tracks/playabletrack/wavetrack/ui/WaveformView.h \
+	tracks/playabletrack/wavetrack/ui/WaveformVRulerControls.cpp \
+	tracks/playabletrack/wavetrack/ui/WaveformVRulerControls.h \
+	tracks/playabletrack/wavetrack/ui/WaveformVZoomHandle.cpp \
+	tracks/playabletrack/wavetrack/ui/WaveformVZoomHandle.h \
 	tracks/playabletrack/wavetrack/ui/WaveTrackControls.cpp \
 	tracks/playabletrack/wavetrack/ui/WaveTrackControls.h \
 	tracks/playabletrack/wavetrack/ui/WaveTrackSliderHandles.cpp \
@@ -706,6 +719,8 @@ audacity_SOURCES = \
 	tracks/ui/PlayIndicatorOverlay.h \
 	tracks/ui/Scrubbing.cpp \
 	tracks/ui/Scrubbing.h \
+	tracks/ui/ScrubUI.cpp \
+	tracks/ui/ScrubUI.h \
 	tracks/ui/SelectHandle.cpp \
 	tracks/ui/SelectHandle.h \
 	tracks/ui/SliderHandle.cpp \
@@ -752,8 +767,6 @@ audacity_SOURCES = \
 	widgets/ImageRoll.h \
 	widgets/KeyView.cpp \
 	widgets/KeyView.h \
-	widgets/LinkingHtmlWindow.cpp \
-	widgets/LinkingHtmlWindow.h \
 	widgets/Meter.cpp \
 	widgets/Meter.h \
 	widgets/MeterPanelBase.cpp \
@@ -800,7 +813,6 @@ audacity_CPPFLAGS += $(FFMPEG_CFLAGS)
 audacity_LDADD += $(FFMPEG_LIBS)
 audacity_SOURCES += \
 	export/ExportFFmpeg.cpp \
-	export/ExportFFmpeg.h \
 	export/ExportFFmpegDialogs.cpp \
 	export/ExportFFmpegDialogs.h \
 	import/ImportFFmpeg.cpp \

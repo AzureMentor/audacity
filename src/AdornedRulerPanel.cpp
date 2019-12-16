@@ -29,25 +29,29 @@
 #include "AColor.h"
 #include "AllThemeResources.h"
 #include "AudioIO.h"
+#include "CellularPanel.h"
+#include "HitTestResult.h"
 #include "Menus.h"
 #include "Prefs.h"
 #include "Project.h"
 #include "ProjectAudioIO.h"
 #include "ProjectAudioManager.h"
+#include "ProjectStatus.h"
 #include "ProjectWindow.h"
 #include "RefreshCode.h"
 #include "Snap.h"
 #include "Track.h"
-#include "TrackPanel.h"
 #include "TrackPanelMouseEvent.h"
 #include "UIHandle.h"
 #include "ViewInfo.h"
 #include "prefs/TracksBehaviorsPrefs.h"
 #include "prefs/TracksPrefs.h"
-#include "toolbars/ControlToolBar.h"
+#include "prefs/ThemePrefs.h"
+#include "toolbars/ToolBar.h"
 #include "tracks/ui/Scrubbing.h"
 #include "tracks/ui/TrackView.h"
 #include "widgets/AButton.h"
+#include "widgets/AudacityMessageBox.h"
 #include "widgets/Grabber.h"
 
 #include <wx/dcclient.h>
@@ -335,8 +339,13 @@ void AdornedRulerPanel::QuickPlayIndicatorOverlay::Draw(
       ;
 
       // Draw indicator in all visible tracks
-      static_cast<TrackPanel&>(panel)
-         .VisitCells( [&]( const wxRect &rect, TrackPanelCell &cell ) {
+      auto pCellularPanel = dynamic_cast<CellularPanel*>( &panel );
+      if ( !pCellularPanel ) {
+         wxASSERT( false );
+         return;
+      }
+      pCellularPanel
+         ->VisitCells( [&]( const wxRect &rect, TrackPanelCell &cell ) {
             const auto pTrackView = dynamic_cast<TrackView*>(&cell);
             if (!pTrackView)
                return;
@@ -371,6 +380,7 @@ enum {
 };
 
 BEGIN_EVENT_TABLE(AdornedRulerPanel, CellularPanel)
+   EVT_IDLE( AdornedRulerPanel::OnIdle )
    EVT_PAINT(AdornedRulerPanel::OnPaint)
    EVT_SIZE(AdornedRulerPanel::OnSize)
 
@@ -570,7 +580,7 @@ public:
    static std::shared_ptr<PlayheadHandle>
    HitTest( const AudacityProject *pProject, wxCoord xx )
    {
-      if( ControlToolBar::Get( *pProject )
+      if( Scrubber::Get( *pProject )
          .IsTransportingPinned() &&
           ProjectAudioIO::Get( *pProject ).IsAudioActive() )
       {
@@ -734,7 +744,7 @@ private:
             bool canScrub =
                scrubber.CanScrub() &&
                mParent &&
-               mParent->mShowScrubbing;
+               mParent->ShowingScrubRuler();
 
             if (!canScrub)
                return RefreshCode::Cancelled;
@@ -783,9 +793,7 @@ private:
          auto &scrubber = Scrubber::Get( *pProject );
          scrubber.Cancel();
          
-         auto &ctb = ControlToolBar::Get( *pProject );
-         wxCommandEvent evt;
-         ctb.OnStop(evt);
+         ProjectAudioManager::Get( *pProject ).Stop();
       }
 
       return result;
@@ -927,35 +935,30 @@ AdornedRulerPanel::AdornedRulerPanel(AudacityProject* project,
 #endif
 
    wxTheApp->Bind(EVT_AUDIOIO_CAPTURE,
-                     &AdornedRulerPanel::OnRecordStartStop,
+                     &AdornedRulerPanel::OnAudioStartStop,
+                     this);
+   wxTheApp->Bind(EVT_AUDIOIO_PLAYBACK,
+                     &AdornedRulerPanel::OnAudioStartStop,
                      this);
 
    // Delay until after CommandManager has been populated:
    this->CallAfter( &AdornedRulerPanel::UpdatePrefs );
+
+   wxTheApp->Bind(EVT_THEME_CHANGE, &AdornedRulerPanel::OnThemeChange, this);
+
+   mViewInfo->selectedRegion.Bind(EVT_SELECTED_REGION_CHANGE,
+      &AdornedRulerPanel::OnSelectionChange, this);
 }
 
 AdornedRulerPanel::~AdornedRulerPanel()
 {
 }
 
-#if 1
-namespace {
-   static const wxChar *scrubEnabledPrefName = wxT("/QuickPlay/ScrubbingEnabled");
-
-   bool ReadScrubEnabledPref()
-   {
-      bool result {};
-      gPrefs->Read(scrubEnabledPrefName, &result, false);
-
-      return result;
-   }
-
-   void WriteScrubEnabledPref(bool value)
-   {
-      gPrefs->Write(scrubEnabledPrefName, value);
-   }
+void AdornedRulerPanel::Refresh( bool eraseBackground, const wxRect *rect )
+{
+   CellularPanel::Refresh( eraseBackground, rect );
+   CallAfter([this]{ CellularPanel::HandleCursorForPresentMouseState(); } );
 }
-#endif
 
 void AdornedRulerPanel::UpdatePrefs()
 {
@@ -980,11 +983,6 @@ void AdornedRulerPanel::UpdatePrefs()
    }
 #endif
 #endif
-
-   mShowScrubbing = ReadScrubEnabledPref();
-   // Affected by the last
-   UpdateRects();
-   SetPanelSize();
 }
 
 void AdornedRulerPanel::ReCreateButtons()
@@ -993,6 +991,7 @@ void AdornedRulerPanel::ReCreateButtons()
    // Get rid of any children we may have
    // DestroyChildren();
 
+   ToolBar::MakeButtonBackgroundsSmall();
    SetBackgroundColour(theTheme.Colour( clrMedium ));
 
    for (auto & button : mButtons) {
@@ -1120,26 +1119,70 @@ namespace {
    }
 }
 
-void AdornedRulerPanel::OnRecordStartStop(wxCommandEvent & evt)
+void AdornedRulerPanel::OnIdle( wxIdleEvent &evt )
+{
+   evt.Skip();
+   DoIdle();
+}
+
+void AdornedRulerPanel::DoIdle()
+{
+   bool changed = UpdateRects();
+   changed = SetPanelSize() || changed;
+
+   auto &project = *mProject;
+   auto &viewInfo = ViewInfo::Get( project );
+   const auto &selectedRegion = viewInfo.selectedRegion;
+
+   bool dirtySelectedRegion = mDirtySelectedRegion
+      || ( mLastDrawnSelectedRegion != selectedRegion );
+
+   changed = changed
+     || dirtySelectedRegion
+     || mLastDrawnH != viewInfo.h
+     || mLastDrawnZoom != viewInfo.GetZoom()
+   ;
+   if (changed)
+      // Cause ruler redraw anyway, because we may be zooming or scrolling,
+      // showing or hiding the scrub bar, etc.
+      Refresh();
+
+   mDirtySelectedRegion = false;
+}
+
+void AdornedRulerPanel::OnAudioStartStop(wxCommandEvent & evt)
 {
    evt.Skip();
 
-   if (evt.GetInt() != 0)
-   {
-      mIsRecording = true;
-      this->CellularPanel::CancelDragging( false );
-      this->CellularPanel::ClearTargets();
+   if ( evt.GetEventType() == EVT_AUDIOIO_CAPTURE ) {
+      if (evt.GetInt() != 0)
+      {
+         mIsRecording = true;
+         this->CellularPanel::CancelDragging( false );
+         this->CellularPanel::ClearTargets();
 
-      UpdateButtonStates();
+         UpdateButtonStates();
+      }
+      else {
+         mIsRecording = false;
+         UpdateButtonStates();
+      }
    }
-   else {
-      mIsRecording = false;
-      UpdateButtonStates();
-   }
+
+   if ( evt.GetInt() == 0 )
+      // So that the play region is updated
+      DoSelectionChange( mViewInfo->selectedRegion );
 }
 
 void AdornedRulerPanel::OnPaint(wxPaintEvent & WXUNUSED(evt))
 {
+   auto &viewInfo = ViewInfo::Get( *GetProject() );
+   mLastDrawnH = viewInfo.h;
+   mLastDrawnZoom = viewInfo.GetZoom();
+   mDirtySelectedRegion = (mLastDrawnSelectedRegion != viewInfo.selectedRegion);
+   mLastDrawnSelectedRegion = viewInfo.selectedRegion;
+   // To do, note other fisheye state when we have that
+
    wxPaintDC dc(this);
 
    auto &backDC = GetBackingDCForRepaint();
@@ -1179,28 +1222,55 @@ void AdornedRulerPanel::OnSize(wxSizeEvent &evt)
    OverlayPanel::OnSize(evt);
 }
 
-void AdornedRulerPanel::UpdateRects()
+void AdornedRulerPanel::OnThemeChange(wxCommandEvent& evt)
 {
-   mInner = mOuter;
-   mInner.x += LeftMargin;
-   mInner.width -= (LeftMargin + RightMargin);
+   evt.Skip();
+   ReCreateButtons();
+}
 
-   auto top = &mInner;
-   auto bottom = &mInner;
+void AdornedRulerPanel::OnSelectionChange(SelectedRegionEvent& evt)
+{
+   evt.Skip();
+   if (!evt.pRegion)
+      return;
+   auto &selectedRegion = *evt.pRegion;
+   DoSelectionChange( selectedRegion );
+}
 
-   if (mShowScrubbing) {
-      mScrubZone = mInner;
-      auto scrubHeight = std::min(mScrubZone.height, (int)(ScrubHeight));
+void AdornedRulerPanel::DoSelectionChange( const SelectedRegion &selectedRegion )
+{
+
+   auto gAudioIO = AudioIOBase::Get();
+   if ( !gAudioIO->IsBusy() &&
+      !ViewInfo::Get( *mProject ).playRegion.Locked()
+   ) {
+      SetPlayRegion( selectedRegion.t0(), selectedRegion.t1() );
+   }
+}
+
+bool AdornedRulerPanel::UpdateRects()
+{
+   auto inner = mOuter;
+   wxRect scrubZone;
+   inner.x += LeftMargin;
+   inner.width -= (LeftMargin + RightMargin);
+
+   auto top = &inner;
+   auto bottom = &inner;
+
+   if (ShowingScrubRuler()) {
+      scrubZone = inner;
+      auto scrubHeight = std::min(scrubZone.height, (int)(ScrubHeight));
 
       int topHeight;
 #ifdef SCRUB_ABOVE
-      top = &mScrubZone, topHeight = scrubHeight;
+      top = &scrubZone, topHeight = scrubHeight;
 #else
-      auto qpHeight = mScrubZone.height - scrubHeight;
-      bottom = &mScrubZone, topHeight = qpHeight;
+      auto qpHeight = scrubZone.height - scrubHeight;
+      bottom = &scrubZone, topHeight = qpHeight;
       // Increase scrub zone height so that hit testing finds it and
       // not QP region, when on bottom 'edge'.
-      mScrubZone.height+=BottomMargin;
+      scrubZone.height+=BottomMargin;
 #endif
 
       top->height = topHeight;
@@ -1213,14 +1283,22 @@ void AdornedRulerPanel::UpdateRects()
 
    bottom->height -= BottomMargin;
 
-   if (!mShowScrubbing)
-      mScrubZone = mInner;
+   if (!ShowingScrubRuler())
+      scrubZone = inner;
+
+   if ( inner == mInner && scrubZone == mScrubZone )
+      // no changes
+      return false;
+
+   mInner = inner;
+   mScrubZone = scrubZone;
 
    mRuler.SetBounds(mInner.GetLeft(),
                     mInner.GetTop(),
                     mInner.GetRight(),
                     mInner.GetBottom());
 
+   return true;
 }
 
 double AdornedRulerPanel::Pos2Time(int p, bool ignoreFisheye)
@@ -1263,7 +1341,7 @@ auto AdornedRulerPanel::QPHandle::Click
          if(scrubber.HasMark()) {
             // We can't stop scrubbing yet (see comments in Bug 1391),
             // but we can pause it.
-            TransportActions::DoPause(*pProject);
+            ProjectAudioManager::Get( *pProject ).OnPause();
          }
 
          // Store the initial play region state
@@ -1287,7 +1365,7 @@ void AdornedRulerPanel::HandleQPClick(wxMouseEvent &evt, wxCoord mousePosX)
    // Temporarily unlock locked play region
    if (mOldPlayRegion.Locked() && evt.LeftDown()) {
       //mPlayRegionLock = true;
-      TransportActions::DoUnlockPlayRegion(*mProject);
+      UnlockPlayRegion();
    }
 
    mLeftDownClickUnsnapped = mQuickPlayPosUnsnapped;
@@ -1540,7 +1618,7 @@ void AdornedRulerPanel::HandleQPRelease(wxMouseEvent &evt)
       if (mOldPlayRegion.Locked()) {
          // Restore Locked Play region
          SetPlayRegion(mOldPlayRegion.GetStart(), mOldPlayRegion.GetEnd());
-         TransportActions::DoLockPlayRegion(*mProject);
+         LockPlayRegion();
          // and release local lock
          mOldPlayRegion.SetLocked( false );
       }
@@ -1562,7 +1640,7 @@ auto AdornedRulerPanel::QPHandle::Cancel
             mParent->mOldPlayRegion.GetStart(), mParent->mOldPlayRegion.GetEnd());
          if (mParent->mOldPlayRegion.Locked()) {
             // Restore Locked Play region
-            TransportActions::DoLockPlayRegion(*pProject);
+            mParent->LockPlayRegion();
             // and release local lock
             mParent->mOldPlayRegion.SetLocked( false );
          }
@@ -1586,9 +1664,6 @@ void AdornedRulerPanel::StartQPPlay(bool looped, bool cutPreview)
    bool startPlaying = (playRegion.GetStart() >= 0);
 
    if (startPlaying) {
-      auto &ctb = ControlToolBar::Get( *mProject );
-      ctb.StopPlaying();
-
       bool loopEnabled = true;
       double start, end;
 
@@ -1625,10 +1700,16 @@ void AdornedRulerPanel::StartQPPlay(bool looped, bool cutPreview)
          : options.playLooped ? PlayMode::loopedPlay
          : PlayMode::normalPlay;
 
+      // Stop only after deciding where to start again, because an event
+      // callback may change the play region back to the selection
+      auto &projectAudioManager = ProjectAudioManager::Get( *mProject );
+      projectAudioManager.Stop();
+
+      // Change play region display while playing
       playRegion.SetTimes( start, end );
       Refresh();
 
-      ctb.PlayPlayRegion((SelectedRegion(start, end)),
+      projectAudioManager.PlayPlayRegion((SelectedRegion(start, end)),
                           options, mode,
                           false,
                           true);
@@ -1645,25 +1726,29 @@ void AdornedRulerPanel::OnToggleScrubRulerFromMenu(wxCommandEvent&)
    scrubber.OnToggleScrubRuler(*mProject);
 }
 
-void AdornedRulerPanel::OnToggleScrubRuler(/*wxCommandEvent&*/)
+bool AdornedRulerPanel::SetPanelSize()
 {
-   mShowScrubbing = !mShowScrubbing;
-   WriteScrubEnabledPref(mShowScrubbing);
-   gPrefs->Flush();
-   SetPanelSize();
-}
-
-void AdornedRulerPanel::SetPanelSize()
-{
-   wxSize size { GetSize().GetWidth(), GetRulerHeight(mShowScrubbing) };
-   SetSize(size);
-   SetMinSize(size);
-   GetParent()->PostSizeEventToParent();
+   const auto oldSize = GetSize();
+   wxSize size { oldSize.GetWidth(), GetRulerHeight(ShowingScrubRuler()) };
+   if ( size != oldSize ) {
+      SetSize(size);
+      SetMinSize(size);
+      GetParent()->PostSizeEventToParent();
+      return true;
+   }
+   else
+      return false;
 }
 
 void AdornedRulerPanel::DrawBothOverlays()
 {
-   TrackPanel::Get( *mProject ).DrawOverlays( false );
+   auto pCellularPanel =
+      dynamic_cast<CellularPanel*>( &GetProjectPanel( *GetProject() ) );
+   if ( !pCellularPanel ) {
+      wxASSERT( false );
+   }
+   else
+      pCellularPanel->DrawOverlays( false );
    DrawOverlays( false );
 }
 
@@ -1700,7 +1785,7 @@ void AdornedRulerPanel::UpdateButtonStates()
 
 void AdornedRulerPanel::OnTogglePinnedState(wxCommandEvent & /*event*/)
 {
-   TransportActions::DoTogglePinnedHead(*mProject);
+   TogglePinnedHead();
    UpdateButtonStates();
 }
 
@@ -1763,7 +1848,7 @@ void AdornedRulerPanel::ShowMenu(const wxPoint & pos)
    prlitem->Enable( playRegion.Locked() || !playRegion.Empty() );
 
    wxMenuItem *ruleritem;
-   if (mShowScrubbing)
+   if (ShowingScrubRuler())
       ruleritem = rulerMenu.Append(OnScrubRulerID, _("Disable Scrub Ruler"));
    else
       ruleritem = rulerMenu.Append(OnScrubRulerID, _("Enable Scrub Ruler"));
@@ -1845,9 +1930,9 @@ void AdornedRulerPanel::OnLockPlayRegion(wxCommandEvent&)
    const auto &viewInfo = ViewInfo::Get( *GetProject() );
    const auto &playRegion = viewInfo.playRegion;
    if (playRegion.Locked())
-      TransportActions::DoUnlockPlayRegion(*mProject);
+      UnlockPlayRegion();
    else
-      TransportActions::DoLockPlayRegion(*mProject);
+      LockPlayRegion();
 }
 
 
@@ -1937,7 +2022,7 @@ void AdornedRulerPanel::DoDrawBackground(wxDC * dc)
    AColor::UseThemeColour( dc, clrTrackInfo );
    dc->DrawRectangle( mInner );
 
-   if (mShowScrubbing) {
+   if (ShowingScrubRuler()) {
       // Let's distinguish the scrubbing area by using a themable
       // colour and a line to set it off.  
       AColor::UseThemeColour(dc, clrScrubRuler, clrTrackPanelText );
@@ -2022,7 +2107,7 @@ void AdornedRulerPanel::DoDrawIndicator
       const int TriangleWidth = width * 3 / 8;
 
       // Double-double headed, left-right
-      auto yy = mShowScrubbing
+      auto yy = ShowingScrubRuler()
       ? mScrubZone.y
       : (mInner.GetBottom() + 1) - 1 /* bevel */ - height;
       tri[ 0 ].x = xx - IndicatorOffset;
@@ -2053,7 +2138,7 @@ void AdornedRulerPanel::DoDrawIndicator
       const int IndicatorHalfWidth = width / 2;
 
       // Double headed, left-right
-      auto yy = mShowScrubbing
+      auto yy = ShowingScrubRuler()
          ? mScrubZone.y
          : (mInner.GetBottom() + 1) - 1 /* bevel */ - height;
       tri[ 0 ].x = xx - IndicatorOffset;
@@ -2068,13 +2153,8 @@ void AdornedRulerPanel::DoDrawIndicator
       dc->DrawPolygon( 3, tri );
    }
    else {
-      bool pinned = ControlToolBar::Get( *mProject ).IsTransportingPinned();
-      wxBitmap & bmp = theTheme.Bitmap( pinned ? 
-         (playing ? bmpPlayPointerPinned : bmpRecordPointerPinned) :
-         (playing ? bmpPlayPointer : bmpRecordPointer) 
-      );
-      const int IndicatorHalfWidth = bmp.GetWidth() / 2;
-      dc->DrawBitmap( bmp, xx - IndicatorHalfWidth -1, mInner.y );
+      auto pair = GetIndicatorBitmap( xx, playing );
+      dc->DrawBitmap( pair.second, pair.first.x, pair.first.y );
 #if 0
 
       // Down pointing triangle
@@ -2089,6 +2169,23 @@ void AdornedRulerPanel::DoDrawIndicator
       dc->DrawPolygon( 3, tri );
 #endif
    }
+}
+
+// Returns the appropriate bitmap, and panel-relative coordinates for its
+// upper left corner.
+std::pair< wxPoint, wxBitmap >
+AdornedRulerPanel::GetIndicatorBitmap(wxCoord xx, bool playing) const
+{
+   bool pinned = Scrubber::Get( *mProject ).IsTransportingPinned();
+   wxBitmap & bmp = theTheme.Bitmap( pinned ?
+      (playing ? bmpPlayPointerPinned : bmpRecordPointerPinned) :
+      (playing ? bmpPlayPointer : bmpRecordPointer)
+   );
+   const int IndicatorHalfWidth = bmp.GetWidth() / 2;
+   return {
+      { xx - IndicatorHalfWidth - 1, mInner.y },
+      bmp
+   };
 }
 
 void AdornedRulerPanel::SetPlayRegion(double playRegionStart,
@@ -2109,8 +2206,7 @@ void AdornedRulerPanel::SetPlayRegion(double playRegionStart,
 
 void AdornedRulerPanel::ClearPlayRegion()
 {
-   auto &ctb = ControlToolBar::Get( *mProject );
-   ctb.StopPlaying();
+   ProjectAudioManager::Get( *mProject ).Stop();
 
    auto &viewInfo = ViewInfo::Get( *GetProject() );
    auto &playRegion = viewInfo.playRegion;
@@ -2143,7 +2239,7 @@ struct AdornedRulerPanel::Subgroup final : TrackPanelGroup {
    explicit Subgroup( const AdornedRulerPanel &ruler ) : mRuler{ ruler } {}
    Subdivision Children( const wxRect & ) override
    {
-      return { Axis::Y, ( mRuler.mShowScrubbing )
+      return { Axis::Y, ( mRuler.ShowingScrubRuler() )
          ? Refinement{
             { mRuler.mInner.GetTop(), mRuler.mQPCell },
             { mRuler.mScrubZone.GetTop(), mRuler.mScrubbingCell },
@@ -2169,6 +2265,12 @@ struct AdornedRulerPanel::MainGroup final : TrackPanelGroup {
    } }; }
    const AdornedRulerPanel &mRuler;
 };
+
+bool AdornedRulerPanel::ShowingScrubRuler() const
+{
+   auto &scrubber = Scrubber::Get( *GetProject() );
+   return scrubber.ShowsBar();
+}
 
 // CellularPanel implementation
 std::shared_ptr<TrackPanelNode> AdornedRulerPanel::Root()
@@ -2207,7 +2309,7 @@ void AdornedRulerPanel::ProcessUIHandleResult
 
 void AdornedRulerPanel::UpdateStatusMessage( const wxString &message )
 {
-   GetProject()->SetStatus(message);
+   ProjectStatus::Get( *GetProject() ).Set(message);
 }
 
 void AdornedRulerPanel::CreateOverlays()
@@ -2215,7 +2317,54 @@ void AdornedRulerPanel::CreateOverlays()
    if (!mOverlay) {
       mOverlay =
          std::make_shared<QuickPlayIndicatorOverlay>( mProject );
-      TrackPanel::Get( *mProject ).AddOverlay( mOverlay );
+      auto pCellularPanel =
+         dynamic_cast<CellularPanel*>( &GetProjectPanel( *GetProject() ) );
+      if ( !pCellularPanel ) {
+         wxASSERT( false );
+      }
+      else
+         pCellularPanel->AddOverlay( mOverlay );
       this->AddOverlay( mOverlay->mPartner );
    }
+}
+
+void AdornedRulerPanel::LockPlayRegion()
+{
+   auto &project = *mProject;
+   auto &tracks = TrackList::Get( project );
+
+   auto &viewInfo = ViewInfo::Get( project );
+   auto &playRegion = viewInfo.playRegion;
+   if (playRegion.GetStart() >= tracks.GetEndTime()) {
+       AudacityMessageBox(_("Cannot lock region beyond\nend of project."),
+                    _("Error"));
+   }
+   else {
+      playRegion.SetLocked( true );
+      Refresh(false);
+   }
+}
+
+void AdornedRulerPanel::UnlockPlayRegion()
+{
+   auto &project = *mProject;
+   auto &viewInfo = ViewInfo::Get( project );
+   auto &playRegion = viewInfo.playRegion;
+   playRegion.SetLocked( false );
+   Refresh(false);
+}
+
+void AdornedRulerPanel::TogglePinnedHead()
+{
+   bool value = !TracksPrefs::GetPinnedHeadPreference();
+   TracksPrefs::SetPinnedHeadPreference(value, true);
+   MenuManager::ModifyAllProjectToolbarMenus();
+
+   auto &project = *mProject;
+   // Update button image
+   UpdateButtonStates();
+
+   auto &scrubber = Scrubber::Get( project );
+   if (scrubber.HasMark())
+      scrubber.SetScrollScrubbing(value);
 }

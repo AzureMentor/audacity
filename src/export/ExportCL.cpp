@@ -12,7 +12,6 @@
 **********************************************************************/
 
 #include "../Audacity.h"
-#include "ExportCL.h"
 
 #include "../ProjectSettings.h"
 
@@ -39,6 +38,7 @@
 #include "../widgets/FileHistory.h"
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/ProgressDialog.h"
+#include "../wxFileNameWrapper.h"
 
 
 //----------------------------------------------------------------------------
@@ -107,6 +107,7 @@ void ExportCLOptions::PopulateOrExchange(ShuttleGui & S)
    wxString cmd;
 
    for (size_t i = 0; i < mHistory.GetCount(); i++) {
+      cmd = mHistory.GetHistoryFile(i);
       cmds.push_back(mHistory.GetHistoryFile(i));
    }
    cmd = cmds[0];
@@ -126,8 +127,8 @@ void ExportCLOptions::PopulateOrExchange(ShuttleGui & S)
                                       wxALIGN_CENTER_VERTICAL);
             S.AddFixedText( {} );
             S.TieCheckBox(_("Show output"),
-                          wxT("/FileFormats/ExternalProgramShowOutput"),
-                          false);
+                          {wxT("/FileFormats/ExternalProgramShowOutput"),
+                           false});
          }
          S.EndMultiColumn();
       }
@@ -293,13 +294,15 @@ public:
    ProgressResult Export(AudacityProject *project,
                std::unique_ptr<ProgressDialog> &pDialog,
                unsigned channels,
-               const wxString &fName,
+               const wxFileNameWrapper &fName,
                bool selectedOnly,
                double t0,
                double t1,
                MixerSpec *mixerSpec = NULL,
                const Tags *metadata = NULL,
                int subformat = 0) override;
+
+   virtual unsigned SequenceNumber() const override { return 60; }
 };
 
 ExportCL::ExportCL()
@@ -310,13 +313,13 @@ ExportCL::ExportCL()
    AddExtension(wxT(""),0);
    SetMaxChannels(255,0);
    SetCanMetaData(false,0);
-   SetDescription(_("(external program)"),0);
+   SetDescription(XO("(external program)"),0);
 }
 
 ProgressResult ExportCL::Export(AudacityProject *project,
                       std::unique_ptr<ProgressDialog> &pDialog,
                       unsigned channels,
-                      const wxString &fName,
+                      const wxFileNameWrapper &fName,
                       bool selectionOnly,
                       double t0,
                       double t1,
@@ -329,10 +332,17 @@ ProgressResult ExportCL::Export(AudacityProject *project,
    bool show;
    long rc;
 
+   const auto path = fName.GetFullPath();
+
    // Retrieve settings
    gPrefs->Read(wxT("/FileFormats/ExternalProgramShowOutput"), &show, false);
    cmd = gPrefs->Read(wxT("/FileFormats/ExternalProgramExportCommand"), wxT("lame - \"%f.mp3\""));
-   cmd.Replace(wxT("%f"), fName);
+   // Bug 2178 - users who don't know what they are doing will 
+   // now get a file extension of .wav appended to their ffmpeg filename
+   // and therefore ffmpeg will be able to choose a file type.
+   if( cmd == wxT("ffmpeg -i - \"%f\"") && !fName.HasExt())
+      cmd.Replace( "%f", "%f.wav" );
+   cmd.Replace(wxT("%f"), path);
 
 #if defined(__WXMSW__)
    // Give Windows a chance at finding lame command in the default location.
@@ -377,7 +387,7 @@ ProgressResult ExportCL::Export(AudacityProject *project,
 
    if (!rc) {
       AudacityMessageBox(wxString::Format(_("Cannot export audio to %s"),
-                                    fName));
+                                    path));
       process.Detach();
       process.CloseOutput();
 
@@ -452,10 +462,10 @@ ProgressResult ExportCL::Export(AudacityProject *project,
       } );
 
       // Prepare the progress display
-      InitProgress( pDialog, _("Export"),
+      InitProgress( pDialog, XO("Export"),
          selectionOnly
-            ? _("Exporting the selected audio using command-line encoder")
-            : _("Exporting the audio using command-line encoder") );
+            ? XO("Exporting the selected audio using command-line encoder")
+            : XO("Exporting the audio using command-line encoder") );
       auto &progress = *pDialog;
 
       // Start piping the mixed data to the command
@@ -526,7 +536,7 @@ ProgressResult ExportCL::Export(AudacityProject *project,
       S.AddTextWindow(cmd + wxT("\n\n") + output);
       S.StartHorizontalLay(wxALIGN_CENTER, false);
       {
-         S.Id(wxID_OK).AddButton(_("&OK"))->SetDefault();
+         S.Id(wxID_OK).AddButton(_("&OK"), wxALIGN_CENTER, true);
       }
       dlg.GetSizer()->AddSpacer(5);
       dlg.Layout();
@@ -548,8 +558,5 @@ wxWindow *ExportCL::OptionsCreate(wxWindow *parent, int format)
    return safenew ExportCLOptions(parent, format);
 }
 
-std::unique_ptr<ExportPlugin> New_ExportCL()
-{
-   return std::make_unique<ExportCL>();
-}
-
+static Exporter::RegisteredExportPlugin
+sRegisteredPlugin{ []{ return std::make_unique< ExportCL >(); } };

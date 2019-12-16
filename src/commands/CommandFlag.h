@@ -16,6 +16,8 @@
 #include <utility>
 #include <wx/string.h>
 
+#include "audacity/Types.h"
+
 class AudacityProject;
 
 // Increase the template parameter as needed to allow more flags
@@ -42,7 +44,7 @@ struct CommandFlagOptions{
    CommandFlagOptions(
       const MessageFormatter &message_,
       const wxString &helpPage_ = {},
-      const wxString &title_ = {}
+      const TranslatableString &title_ = {}
    ) : message{ message_ }, helpPage{ helpPage_ }, title{ title_ }
    {}
 
@@ -63,7 +65,7 @@ struct CommandFlagOptions{
    // Empty, or non-default title for the dialog box when the
    // condition is not satisfied for the selected command
    // This string must be given UN-translated.
-   wxString title;
+   TranslatableString title;
 
    // Conditions with higher "priority" are preferred over others in choosing
    // the help message
@@ -90,10 +92,6 @@ public:
       const CommandFlagOptions &options = {} );
 };
 
-// Widely used command flags, but this list need not be exhaustive.  It may be
-// extended, with special purpose flags of limited use, by constucting static
-// ReservedCommandFlag values
-
 // To describe auto-selection, stop-if-paused, etc.:
 // A structure describing a set of conditions, another set that might be
 // made true given the first, and the function that may make them true.
@@ -101,12 +99,17 @@ public:
 // then the enabler will be invoked (unless the menu item is constructed with
 // the useStrictFlags option, or the applicability test first returns false).
 // The item's full set of required flags is passed to the function.
+
+// Computation of the flags is delayed inside a function -- because often you
+// need to name a statically allocated CommandFlag, or a bitwise OR of some,
+// while they may not have been initialized yet, during static initialization.
 struct MenuItemEnabler {
+   using Flags = std::function< CommandFlag() >;
    using Test = std::function< bool( const AudacityProject& ) >;
    using Action = std::function< void( AudacityProject&, CommandFlag ) >;
 
-   const CommandFlag &actualFlags;
-   const CommandFlag &possibleFlags;
+   const Flags actualFlags;
+   const Flags possibleFlags;
    Test applicable;
    Action tryEnable;
 };

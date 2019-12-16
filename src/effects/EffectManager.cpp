@@ -48,6 +48,7 @@ effects.
 #include "../ProjectWindow.h"
 #include "../SelectUtilities.h"
 #include "../TrackPanel.h"
+#include "../TrackPanelAx.h"
 #include "../ViewInfo.h"
 #include "../WaveTrack.h"
 
@@ -130,7 +131,7 @@ void EffectManager::UnregisterEffect(const PluginID & ID)
    // for batch commands
    if (flags & EffectManager::kConfigured)
    {
-      TransportActions::DoStop(project);
+      ProjectAudioManager::Get( project ).Stop();
       SelectUtilities::SelectAllIfNone( project );
    }
 
@@ -166,7 +167,7 @@ void EffectManager::UnregisterEffect(const PluginID & ID)
    EffectManager & em = EffectManager::Get();
 
    success = em.DoEffect(ID, &window, rate,
-      &tracks, &trackFactory, &selectedRegion,
+      &tracks, &trackFactory, selectedRegion,
       (flags & EffectManager::kConfigured) == 0);
 
    if (!success)
@@ -207,7 +208,10 @@ void EffectManager::UnregisterEffect(const PluginID & ID)
          window.DoZoomFit();
          //  trackPanel->Refresh(false);
    }
+
+   // PRL:  RedrawProject explicitly because sometimes history push is skipped
    window.RedrawProject();
+
    if (focus != nullptr && focus->GetParent()==parent) {
       focus->SetFocus();
    }
@@ -224,8 +228,10 @@ void EffectManager::UnregisterEffect(const PluginID & ID)
       auto pTrack = *tracks.Selected().begin();
       if (!pTrack)
          pTrack = *tracks.Any().begin();
-      if (pTrack)
+      if (pTrack) {
+         TrackFocus::Get(project).Set(pTrack);
          pTrack->EnsureVisible();
+      }
    }
 
    return true;
@@ -236,7 +242,7 @@ bool EffectManager::DoEffect(const PluginID & ID,
                              double projectRate,
                              TrackList *list,
                              TrackFactory *factory,
-                             SelectedRegion *selectedRegion,
+                             NotifyingSelectedRegion &selectedRegion,
                              bool shouldPrompt /* = true */)
 
 {
@@ -294,19 +300,19 @@ wxString EffectManager::GetCommandName(const PluginID & ID)
    return GetCommandSymbol(ID).Translation();
 }
 
-wxString EffectManager::GetEffectFamilyName(const PluginID & ID)
+TranslatableString EffectManager::GetEffectFamilyName(const PluginID & ID)
 {
    auto effect = GetEffect(ID);
    if (effect)
-      return effect->GetFamily().Translation();
+      return effect->GetFamily().Msgid();
    return {};
 }
 
-wxString EffectManager::GetVendorName(const PluginID & ID)
+TranslatableString EffectManager::GetVendorName(const PluginID & ID)
 {
    auto effect = GetEffect(ID);
    if (effect)
-      return effect->GetVendor().Translation();
+      return effect->GetVendor().Msgid();
    return {};
 }
 
@@ -694,7 +700,7 @@ Effect *EffectManager::GetEffect(const PluginID & ID)
 
       auto command = dynamic_cast<AudacityCommand *>(PluginManager::Get().GetInstance(ID));
       if( !command )
-         AudacityMessageBox(wxString::Format(_("Attempting to initialize the following effect failed:\n\n%s\n\nMore information may be available in Help->Show Log"),
+         AudacityMessageBox(wxString::Format(_("Attempting to initialize the following effect failed:\n\n%s\n\nMore information may be available in 'Help > Diagnostics > Show Log'"),
                                     GetCommandName(ID)),
                    _("Effect failed to initialize"));
 
@@ -750,7 +756,7 @@ AudacityCommand *EffectManager::GetAudacityCommand(const PluginID & ID)
          }
       }
 */
-      AudacityMessageBox(wxString::Format(_("Attempting to initialize the following command failed:\n\n%s\n\nMore information may be available in Help->Show Log"),
+      AudacityMessageBox(wxString::Format(_("Attempting to initialize the following command failed:\n\n%s\n\nMore information may be available in 'Help > Diagnostics > Show Log'"),
                                     GetCommandName(ID)),
                    _("Command failed to initialize"));
 

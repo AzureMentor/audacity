@@ -70,7 +70,7 @@ class PROFILE_DLL_API DirManager final
                                                 wxString filespec,
                                                 bool bFiles, bool bDirs,
                                                 int progress_count,
-                                                const wxChar* message);
+                                                const TranslatableString &message);
 
    static int RecursivelyCountSubdirs( const FilePath &dirPath );
 
@@ -79,7 +79,7 @@ class PROFILE_DLL_API DirManager final
                                           ProgressDialog* pProgress = nullptr);
 
    static void RecursivelyRemove(const FilePaths& filePathArray, int count, int bias,
-                                 int flags, const wxChar* message = nullptr);
+                                 int flags, const TranslatableString &message = {});
 
    // Type of a function that builds a block file, using attributes from XML
    using BlockFileDeserializer =
@@ -100,6 +100,8 @@ class PROFILE_DLL_API DirManager final
 
    static std::shared_ptr< DirManager > Create();
 
+   DirManager( const DirManager & ) PROHIBITED;
+   DirManager &operator=( const DirManager & ) PROHIBITED;
    virtual ~DirManager();
 
    size_t NumBlockFiles() const { return mBlockFileHash.size(); }
@@ -191,7 +193,7 @@ class PROFILE_DLL_API DirManager final
       const FilePath &path, 
       const wxString &dirSpec, 
       const wxString &fileSpec, 
-      const wxString &msg,
+      const TranslatableString &msg,
       int flags = 0);
 
    void FindMissingAliasFiles(
@@ -260,8 +262,6 @@ class PROFILE_DLL_API DirManager final
    FilePath projName;
    FilePath projPath;
    FilePath projFull;
-
-   wxString lastProject;
 
    FilePaths aliasList;
 

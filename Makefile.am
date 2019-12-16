@@ -69,6 +69,7 @@ nobase_dist_pkgdata_DATA = \
    plug-ins/highpass.ny \
    plug-ins/limiter.ny \
    plug-ins/lowpass.ny \
+   plug-ins/noisegate.ny \
    plug-ins/notch.ny \
    plug-ins/nyquist-plug-in-installer.ny \
    plug-ins/pluck.ny \
@@ -84,7 +85,6 @@ nobase_dist_pkgdata_DATA = \
    plug-ins/SpectralEditShelves.ny \
    plug-ins/StudioFadeOut.ny \
    plug-ins/tremolo.ny \
-   plug-ins/vocalremover.ny \
    plug-ins/vocalrediso.ny \
    plug-ins/vocoder.ny \
    $(NULL)

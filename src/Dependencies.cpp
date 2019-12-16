@@ -47,13 +47,15 @@ AliasedFile s.
 #include <wx/choice.h>
 #include <wx/clipbrd.h>
 #include <wx/dataobj.h>
+#include <wx/frame.h>
 #include <wx/stattext.h>
 
 #include "blockfile/SimpleBlockFile.h"
 #include "DirManager.h"
+#include "FileFormats.h"
 #include "Prefs.h"
+#include "Project.h"
 #include "ProjectSettings.h"
-#include "ProjectWindow.h"
 #include "Sequence.h"
 #include "ShuttleGui.h"
 #include "WaveTrack.h"
@@ -168,9 +170,9 @@ static void RemoveDependencies(AudacityProject *project,
    auto &dirManager = DirManager::Get( *project );
    const auto &settings = ProjectSettings::Get( *project );
 
-   ProgressDialog progress
-      (_("Removing Dependencies"),
-      _("Copying audio data into project..."));
+   ProgressDialog progress(
+      XO("Removing Dependencies"),
+      XO("Copying audio data into project..."));
    auto updateResult = ProgressResult::Success;
 
    // Hash aliasedFiles based on their full paths and
@@ -354,21 +356,19 @@ void DependencyDialog::PopulateOrExchange(ShuttleGui& S)
 
       S.StartStatic(_("Project Dependencies"),1);
       {
-         mFileListCtrl = S.Id(FileListID).AddListControlReportMode();
-         mFileListCtrl->InsertColumn(0, _("Audio File"));
-         mFileListCtrl->SetColumnWidth(0, 220);
-         mFileListCtrl->InsertColumn(1, _("Disk Space"));
-         mFileListCtrl->SetColumnWidth(1, 120);
+         mFileListCtrl = S.Id(FileListID).AddListControlReportMode({
+            { _("Audio File"), wxLIST_FORMAT_LEFT, 220 },
+            { _("Disk Space"), wxLIST_FORMAT_LEFT, 120 }
+         });
          PopulateList();
 
          mCopySelectedFilesButton =
-            S.Id(CopySelectedFilesButtonID).AddButton(
-               _("Copy Selected Files"),
-               wxALIGN_LEFT);
-         mCopySelectedFilesButton->Enable(
-            mFileListCtrl->GetSelectedItemCount() > 0);
-         mCopySelectedFilesButton->SetDefault();
-         mCopySelectedFilesButton->SetFocus();
+            S.Id(CopySelectedFilesButtonID)
+               .Focus()
+               .Disable(mFileListCtrl->GetSelectedItemCount() <= 0)
+               .AddButton(
+                  _("Copy Selected Files"),
+                  wxALIGN_LEFT, true);
       }
       S.EndStatic();
 
@@ -382,11 +382,12 @@ void DependencyDialog::PopulateOrExchange(ShuttleGui& S)
             S.Id(wxID_NO).AddButton(_("Do Not Copy"));
 
          mCopyAllFilesButton =
-            S.Id(wxID_YES).AddButton(_("Copy All Files (Safer)"));
+            S.Id(wxID_YES)
+               // Enabling mCopyAllFilesButton is also done in PopulateList,
+               // but at its call above, mCopyAllFilesButton does not yet exist.
+               .Disable(mHasMissingFiles)
+               .AddButton(_("Copy All Files (Safer)"));
 
-         // Enabling mCopyAllFilesButton is also done in PopulateList,
-         // but at its call above, mCopyAllFilesButton does not yet exist.
-         mCopyAllFilesButton->Enable(!mHasMissingFiles);
       }
       S.EndHorizontalLay();
 
@@ -394,22 +395,22 @@ void DependencyDialog::PopulateOrExchange(ShuttleGui& S)
       {
          S.StartHorizontalLay(wxALIGN_LEFT,0);
          {
-            wxArrayStringEx choices{
-               /*i18n-hint: One of the choices of what you want Audacity to do when
-               * Audacity finds a project depends on another file.*/
-               _("Ask me") ,
-               _("Always copy all files (safest)") ,
-               _("Never copy any files") ,
-            };
             mFutureActionChoice =
                S.Id(FutureActionChoiceID).AddChoice(
                   _("Whenever a project depends on other files:"),
-                  choices,
+                  {
+                     /*i18n-hint: One of the choices of what you want Audacity to do when
+                     * Audacity finds a project depends on another file.*/
+                     _("Ask me") ,
+                     _("Always copy all files (safest)") ,
+                     _("Never copy any files") ,
+                  },
                   0 // "Ask me"
                );
          }
          S.EndHorizontalLay();
-      } else
+      }
+      else
       {
          mFutureActionChoice = NULL;
       }
@@ -588,8 +589,7 @@ void DependencyDialog::SaveFutureActionChoice()
       case 2: savePref = wxT("never"); break;
       default: savePref = wxT("ask");
       }
-      gPrefs->Write(wxT("/FileFormats/SaveProjectWithDependencies"),
-                    savePref);
+      FileFormatsSaveWithDependenciesSetting.Write( savePref );
       gPrefs->Flush();
    }
 }
@@ -600,7 +600,7 @@ void DependencyDialog::SaveFutureActionChoice()
 bool ShowDependencyDialogIfNeeded(AudacityProject *project,
                                   bool isSaving)
 {
-   auto pWindow = ProjectWindow::Find( project );
+   auto pWindow = FindProjectFrame( project );
    AliasedFileArray aliasedFiles;
    FindDependencies(project, aliasedFiles);
 
@@ -608,10 +608,17 @@ bool ShowDependencyDialogIfNeeded(AudacityProject *project,
       if (!isSaving)
       {
          wxString msg =
+#ifdef EXPERIMENTAL_OD_DATA
 _("Your project is currently self-contained; it does not depend on any external audio files. \
 \n\nIf you change the project to a state that has external dependencies on imported \
 files, it will no longer be self-contained. If you then Save without copying those files in, \
 you may lose data.");
+#else
+_("Your project is self-contained; it does not depend on any external audio files. \
+\n\nSome older Audacity projects may not be self-contained, and care \n\
+is needed to keep their external dependencies in the right place.\n\
+New projects will be self-contained and are less risky.");
+#endif
          AudacityMessageBox(msg,
                       _("Dependency Check"),
                       wxOK | wxICON_INFORMATION,
@@ -622,10 +629,9 @@ you may lose data.");
 
    if (isSaving)
    {
+#ifdef EXPERIMENTAL_OD_DATA
       wxString action =
-         gPrefs->Read(
-            wxT("/FileFormats/SaveProjectWithDependencies"),
-            wxT("ask"));
+         FileFormatsSaveWithDependenciesSetting.Read();
       if (action == wxT("copy"))
       {
          // User always wants to remove dependencies
@@ -635,6 +641,10 @@ you may lose data.");
       if (action == wxT("never"))
          // User never wants to remove dependencies
          return true;
+#else 
+      RemoveDependencies(project, aliasedFiles);
+      return true;
+#endif
    }
 
    DependencyDialog dlog(pWindow, -1, project, aliasedFiles, isSaving);

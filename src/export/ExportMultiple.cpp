@@ -8,7 +8,7 @@
 
 *******************************************************************//**
 
-\class ExportMultiple
+\class ExportMultipleDialog
 \brief Presents a dialog box allowing the user to export multiple files
   either by exporting each track as a separate file, or by
   exporting each label as a separate file.
@@ -98,25 +98,25 @@ enum {
 };
 
 //
-// ExportMultiple methods
+// ExportMultipleDialog methods
 //
 
-BEGIN_EVENT_TABLE(ExportMultiple, wxDialogWrapper)
-   EVT_CHOICE(FormatID, ExportMultiple::OnFormat)
-//   EVT_BUTTON(OptionsID, ExportMultiple::OnOptions)
-   EVT_BUTTON(CreateID, ExportMultiple::OnCreate)
-   EVT_BUTTON(ChooseID, ExportMultiple::OnChoose)
-   EVT_BUTTON(wxID_OK, ExportMultiple::OnExport)
-   EVT_BUTTON(wxID_CANCEL, ExportMultiple::OnCancel)
-   EVT_BUTTON(wxID_HELP, ExportMultiple::OnHelp)
-   EVT_RADIOBUTTON(LabelID, ExportMultiple::OnLabel)
-   EVT_RADIOBUTTON(TrackID, ExportMultiple::OnTrack)
-   EVT_RADIOBUTTON(ByNameAndNumberID, ExportMultiple::OnByName)
-   EVT_RADIOBUTTON(ByNameID, ExportMultiple::OnByName)
-   EVT_RADIOBUTTON(ByNumberID, ExportMultiple::OnByNumber)
-   EVT_CHECKBOX(FirstID, ExportMultiple::OnFirst)
-   EVT_TEXT(FirstFileNameID, ExportMultiple::OnFirstFileName)
-   EVT_TEXT(PrefixID, ExportMultiple::OnPrefix)
+BEGIN_EVENT_TABLE(ExportMultipleDialog, wxDialogWrapper)
+   EVT_CHOICE(FormatID, ExportMultipleDialog::OnFormat)
+//   EVT_BUTTON(OptionsID, ExportMultipleDialog::OnOptions)
+   EVT_BUTTON(CreateID, ExportMultipleDialog::OnCreate)
+   EVT_BUTTON(ChooseID, ExportMultipleDialog::OnChoose)
+   EVT_BUTTON(wxID_OK, ExportMultipleDialog::OnExport)
+   EVT_BUTTON(wxID_CANCEL, ExportMultipleDialog::OnCancel)
+   EVT_BUTTON(wxID_HELP, ExportMultipleDialog::OnHelp)
+   EVT_RADIOBUTTON(LabelID, ExportMultipleDialog::OnLabel)
+   EVT_RADIOBUTTON(TrackID, ExportMultipleDialog::OnTrack)
+   EVT_RADIOBUTTON(ByNameAndNumberID, ExportMultipleDialog::OnByName)
+   EVT_RADIOBUTTON(ByNameID, ExportMultipleDialog::OnByName)
+   EVT_RADIOBUTTON(ByNumberID, ExportMultipleDialog::OnByNumber)
+   EVT_CHECKBOX(FirstID, ExportMultipleDialog::OnFirst)
+   EVT_TEXT(FirstFileNameID, ExportMultipleDialog::OnFirstFileName)
+   EVT_TEXT(PrefixID, ExportMultipleDialog::OnPrefix)
 END_EVENT_TABLE()
 
 BEGIN_EVENT_TABLE(SuccessDialog, wxDialogWrapper)
@@ -128,7 +128,7 @@ BEGIN_EVENT_TABLE(MouseEvtHandler, wxEvtHandler)
    EVT_LEFT_DCLICK(MouseEvtHandler::OnMouse)
 END_EVENT_TABLE()
 
-ExportMultiple::ExportMultiple(AudacityProject *project)
+ExportMultipleDialog::ExportMultipleDialog(AudacityProject *project)
 : wxDialogWrapper( &GetProjectFrame( *project ),
    wxID_ANY, wxString(_("Export Multiple")) )
 , mSelectionState{ SelectionState::Get( *project ) }
@@ -162,21 +162,24 @@ ExportMultiple::ExportMultiple(AudacityProject *project)
    EnableControls();
 }
 
-ExportMultiple::~ExportMultiple()
+ExportMultipleDialog::~ExportMultipleDialog()
 {
 }
 
-void ExportMultiple::CountTracksAndLabels()
+void ExportMultipleDialog::CountTracksAndLabels()
 {
+   bool anySolo = !(( mTracks->Any<const WaveTrack>() + &WaveTrack::GetSolo ).empty());
+
    mNumWaveTracks =
-      (mTracks->Leaders< const WaveTrack >() - &WaveTrack::GetMute).size();
+      (mTracks->Leaders< const WaveTrack >() - 
+      (anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute)).size();
 
    // only the first label track
    mLabels = *mTracks->Any< const LabelTrack >().begin();
    mNumLabels = mLabels ? mLabels->GetNumLabels() : 0;
 }
 
-int ExportMultiple::ShowModal()
+int ExportMultipleDialog::ShowModal()
 {
    // Cannot export if all audio tracks are muted.
    if (mNumWaveTracks == 0)
@@ -215,11 +218,12 @@ int ExportMultiple::ShowModal()
    return wxDialogWrapper::ShowModal();
 }
 
-void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
+void ExportMultipleDialog::PopulateOrExchange(ShuttleGui& S)
 {
    wxString name = mProject->GetProjectName();
    wxString defaultFormat = gPrefs->Read(wxT("/Export/Format"), wxT("WAV"));
 
+   TranslatableStrings visibleFormats;
    wxArrayStringEx formats;
    mPluginIndex = -1;
    mFilterIndex = 0;
@@ -231,7 +235,12 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
          ++i;
          for (int j = 0; j < pPlugin->GetFormatCount(); j++)
          {
-            formats.push_back(mPlugins[i]->GetDescription(j));
+            auto format = mPlugins[i]->GetUntranslatedDescription(j);
+            visibleFormats.push_back( format );
+            // use MSGID of description as a value too, written into config file
+            // This is questionable.  A change in the msgid can make the
+            // preference stored in old config files inapplicable
+            formats.push_back( format.MSGID().GET() );
             if (mPlugins[i]->GetFormat(j) == defaultFormat) {
                mPluginIndex = i;
                mSubFormatIndex = j;
@@ -263,18 +272,24 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
          {
             mDir = S.Id(DirID)
                .TieTextBox(_("Folder:"),
-                           wxT("/Export/MultiplePath"),
-                           DefaultPath,
+                           {wxT("/Export/MultiplePath"),
+                            DefaultPath},
                            64);
             S.Id(ChooseID).AddButton(_("Choose..."));
             S.Id(CreateID).AddButton(_("Create"));
 
             mFormat = S.Id(FormatID)
-               .TieChoice(_("Format:"),
-                          wxT("/Export/MultipleFormat"),
-                          formats[mFilterIndex],
-                          formats,
-                          formats);
+               .TieChoice( _("Format:"),
+               {
+                  wxT("/Export/MultipleFormat"),
+                  {
+                     ByColumns,
+                     visibleFormats,
+                     formats
+                  },
+                  mFilterIndex
+               }
+            );
             S.AddVariableText( {}, false);
             S.AddVariableText( {}, false);
 
@@ -310,12 +325,11 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
          S.SetBorder(1);
          mTrack = S.Id(TrackID)
             .AddRadioButton(_("Tracks"));
-         mTrack->SetName(_("Tracks"));
 
          // Row 2
          S.SetBorder(1);
-         mLabel = S.Id(LabelID).AddRadioButtonToGroup(_("Labels"));
-         mLabel->SetName(_("Labels"));
+         mLabel = S.Id(LabelID)
+            .AddRadioButtonToGroup(_("Labels"));
          S.SetBorder(3);
 
          S.StartMultiColumn(2, wxEXPAND);
@@ -333,10 +347,11 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
             {
                mFirstFileLabel = S.AddVariableText(_("First file name:"), false);
                mFirstFileName = S.Id(FirstFileNameID)
-                  .Prop(1).TieTextBox( {},
+                  .Prop(1)
+                  .Name(XO("First file name"))
+                  .TieTextBox( {},
                               name,
                               30);
-               mFirstFileName->SetName(_("First file name"));
             }
             S.EndMultiColumn();
          }
@@ -350,16 +365,21 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
       S.StartStatic(_("Name files:"), 1);
       {
          S.SetBorder(2);
-         S.StartRadioButtonGroup(wxT("/Export/TrackNameWithOrWithoutNumbers"), wxT("labelTrack"));
+         S.StartRadioButtonGroup({
+            wxT("/Export/TrackNameWithOrWithoutNumbers"),
+            {
+               { wxT("labelTrack"), XO("Using Label/Track Name") },
+               { wxT("numberBefore"), XO("Numbering before Label/Track Name") },
+               { wxT("numberAfter"), XO("Numbering after File name prefix") },
+            },
+            0 // labelTrack
+         });
          {
-            mByName = S.Id(ByNameID)
-               .TieRadioButton(_("Using Label/Track Name"), wxT("labelTrack"));
+            mByName = S.Id(ByNameID).TieRadioButton();
 
-            mByNumberAndName = S.Id(ByNameAndNumberID)
-               .TieRadioButton(_("Numbering before Label/Track Name"), wxT("numberBefore"));
+            mByNumberAndName = S.Id(ByNameAndNumberID).TieRadioButton();
 
-            mByNumber = S.Id(ByNumberID)
-               .TieRadioButton(_("Numbering after File name prefix"), wxT("numberAfter"));
+            mByNumber = S.Id(ByNumberID).TieRadioButton();
          }
          S.EndRadioButtonGroup();
 
@@ -370,10 +390,10 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
             S.AddVariableText(wxT("   "), false);
             mPrefixLabel = S.AddVariableText(_("File name prefix:"), false);
             mPrefix = S.Id(PrefixID)
+               .Name(XO("File name prefix"))
                .TieTextBox( {},
                            name,
                            30);
-            mPrefix->SetName(_("File name prefix"));
          }
          S.EndMultiColumn();
       }
@@ -385,8 +405,8 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
    S.StartHorizontalLay(wxEXPAND, false);
    {
       mOverwrite = S.Id(OverwriteID).TieCheckBox(_("Overwrite existing files"),
-                                                 wxT("/Export/OverwriteExisting"),
-                                                 false);
+                                                 {wxT("/Export/OverwriteExisting"),
+                                                  false});
    }
    S.EndHorizontalLay();
 
@@ -396,7 +416,7 @@ void ExportMultiple::PopulateOrExchange(ShuttleGui& S)
 
 }
 
-void ExportMultiple::EnableControls()
+void ExportMultipleDialog::EnableControls()
 {
    bool enable;
 
@@ -430,14 +450,14 @@ void ExportMultiple::EnableControls()
    mExport->Enable(ok);
 }
 
-void ExportMultiple::OnFormat(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnFormat(wxCommandEvent& WXUNUSED(event))
 {
    mBook->ChangeSelection(mFormat->GetSelection());
 
    EnableControls();
 }
 
-void ExportMultiple::OnOptions(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnOptions(wxCommandEvent& WXUNUSED(event))
 {
    const int sel = mFormat->GetSelection();
    if (sel != wxNOT_FOUND)
@@ -461,7 +481,7 @@ void ExportMultiple::OnOptions(wxCommandEvent& WXUNUSED(event))
    mPlugins[mPluginIndex]->DisplayOptions(this,mSubFormatIndex);
 }
 
-void ExportMultiple::OnCreate(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnCreate(wxCommandEvent& WXUNUSED(event))
 {
    wxFileName fn;
 
@@ -480,7 +500,7 @@ void ExportMultiple::OnCreate(wxCommandEvent& WXUNUSED(event))
                   wxOK | wxCENTRE, this);
 }
 
-void ExportMultiple::OnChoose(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnChoose(wxCommandEvent& WXUNUSED(event))
 {
    wxDirDialogWrapper dlog(this,
                     _("Choose a location to save the exported files"),
@@ -490,52 +510,52 @@ void ExportMultiple::OnChoose(wxCommandEvent& WXUNUSED(event))
       mDir->SetValue(dlog.GetPath());
 }
 
-void ExportMultiple::OnLabel(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnLabel(wxCommandEvent& WXUNUSED(event))
 {
    EnableControls();
 }
 
-void ExportMultiple::OnFirst(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnFirst(wxCommandEvent& WXUNUSED(event))
 {
    EnableControls();
 }
 
-void ExportMultiple::OnFirstFileName(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnFirstFileName(wxCommandEvent& WXUNUSED(event))
 {
    EnableControls();
 }
 
-void ExportMultiple::OnTrack(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnTrack(wxCommandEvent& WXUNUSED(event))
 {
    EnableControls();
 }
 
-void ExportMultiple::OnByName(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnByName(wxCommandEvent& WXUNUSED(event))
 {
    EnableControls();
 }
 
-void ExportMultiple::OnByNumber(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnByNumber(wxCommandEvent& WXUNUSED(event))
 {
    EnableControls();
 }
 
-void ExportMultiple::OnPrefix(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnPrefix(wxCommandEvent& WXUNUSED(event))
 {
    EnableControls();
 }
 
-void ExportMultiple::OnCancel(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnCancel(wxCommandEvent& WXUNUSED(event))
 {
    EndModal(0);
 }
 
-void ExportMultiple::OnHelp(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnHelp(wxCommandEvent& WXUNUSED(event))
 {
    HelpSystem::ShowHelp(this, wxT("Export_Multiple"), true);
 }
 
-void ExportMultiple::OnExport(wxCommandEvent& WXUNUSED(event))
+void ExportMultipleDialog::OnExport(wxCommandEvent& WXUNUSED(event))
 {
    ShuttleGui S(this, eIsSavingToPrefs);
    PopulateOrExchange(S);
@@ -621,7 +641,7 @@ void ExportMultiple::OnExport(wxCommandEvent& WXUNUSED(event))
    }
 }
 
-bool ExportMultiple::DirOk()
+bool ExportMultipleDialog::DirOk()
 {
    wxFileName fn;
 
@@ -654,9 +674,12 @@ static unsigned GetNumExportChannels( const TrackList &tracks )
    //int numMono = 0;
    /* track iteration kit */
 
+   bool anySolo = !(( tracks.Any<const WaveTrack>() + &WaveTrack::GetSolo ).empty());
+
    // Want only unmuted wave tracks.
    for (auto tr :
-         tracks.Any< const WaveTrack >() - &WaveTrack::GetMute
+         tracks.Any< const WaveTrack >() - 
+      (anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute)
    ) {
       // Found a left channel
       if (tr->GetChannel() == Track::LeftChannel) {
@@ -699,7 +722,7 @@ static unsigned GetNumExportChannels( const TrackList &tracks )
 
 // TODO: JKC July2016: Merge labels/tracks duplicated export code.
 // TODO: JKC Apr2019: Doubly so merge these!  Too much duplication.
-ProgressResult ExportMultiple::ExportMultipleByLabel(bool byName,
+ProgressResult ExportMultipleDialog::ExportMultipleByLabel(bool byName,
    const wxString &prefix, bool addNumber)
 {
    wxASSERT(mProject);
@@ -794,6 +817,9 @@ ProgressResult ExportMultiple::ExportMultipleByLabel(bool byName,
          // let the user have a crack at editing it, exit if cancelled
          auto &settings = ProjectSettings::Get( *mProject );
          bool bShowTagsDialog = settings.GetShowId3Dialog();
+
+         bShowTagsDialog = bShowTagsDialog && mPlugins[mPluginIndex]->GetCanMetaData(mSubFormatIndex);
+
          if( bShowTagsDialog ){
             bool bCancelled = !setting.filetags.ShowEditDialog(
                ProjectWindow::Find( mProject ),
@@ -835,7 +861,7 @@ ProgressResult ExportMultiple::ExportMultipleByLabel(bool byName,
    return ok;
 }
 
-ProgressResult ExportMultiple::ExportMultipleByTrack(bool byName,
+ProgressResult ExportMultipleDialog::ExportMultipleByTrack(bool byName,
    const wxString &prefix, bool addNumber)
 {
    wxASSERT(mProject);
@@ -857,8 +883,11 @@ ProgressResult ExportMultiple::ExportMultipleByTrack(bool byName,
    for (auto tr : mTracks->Selected<WaveTrack>())
       tr->SetSelected(false);
 
+   bool anySolo = !(( mTracks->Any<const WaveTrack>() + &WaveTrack::GetSolo ).empty());
+
    /* Examine all tracks in turn, collecting export information */
-   for (auto tr : mTracks->Leaders<WaveTrack>() - &WaveTrack::GetMute) {
+   for (auto tr : mTracks->Leaders<WaveTrack>() - 
+      (anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute)) {
 
       // Get the times for the track
       auto channels = TrackList::Channels(tr);
@@ -914,6 +943,9 @@ ProgressResult ExportMultiple::ExportMultipleByTrack(bool byName,
          // let the user have a crack at editing it, exit if cancelled
          auto &settings = ProjectSettings::Get( *mProject );
          bool bShowTagsDialog = settings.GetShowId3Dialog();
+
+         bShowTagsDialog = bShowTagsDialog && mPlugins[mPluginIndex]->GetCanMetaData(mSubFormatIndex);
+
          if( bShowTagsDialog ){
             bool bCancelled = !setting.filetags.ShowEditDialog(
                ProjectWindow::Find( mProject ),
@@ -934,7 +966,10 @@ ProgressResult ExportMultiple::ExportMultipleByTrack(bool byName,
    int count = 0; // count the number of sucessful runs
    ExportKit activeSetting;  // pointer to the settings in use for this export
    std::unique_ptr<ProgressDialog> pDialog;
-   for (auto tr : mTracks->Leaders<WaveTrack>() - &WaveTrack::GetMute) {
+
+   for (auto tr : mTracks->Leaders<WaveTrack>() - 
+      (anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute)) {
+
       wxLogDebug( "Get setting %i", count );
       /* get the settings to use for the export from the array */
       activeSetting = exportSettings[count];
@@ -966,7 +1001,7 @@ ProgressResult ExportMultiple::ExportMultipleByTrack(bool byName,
    return ok ;
 }
 
-ProgressResult ExportMultiple::DoExport(std::unique_ptr<ProgressDialog> &pDialog,
+ProgressResult ExportMultipleDialog::DoExport(std::unique_ptr<ProgressDialog> &pDialog,
                               unsigned channels,
                               const wxFileName &inName,
                               bool selectedOnly,
@@ -1056,7 +1091,7 @@ ProgressResult ExportMultiple::DoExport(std::unique_ptr<ProgressDialog> &pDialog
    return success;
 }
 
-wxString ExportMultiple::MakeFileName(const wxString &input)
+wxString ExportMultipleDialog::MakeFileName(const wxString &input)
 {
    wxString newname = input; // name we are generating
 

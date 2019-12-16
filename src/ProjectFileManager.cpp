@@ -22,6 +22,7 @@ Paul Licameli split from AudacityProject.cpp
 #include "AutoRecovery.h"
 #include "Dependencies.h"
 #include "DirManager.h"
+#include "FileFormats.h"
 #include "FileNames.h"
 #include "Legacy.h"
 #include "PlatformCompatibility.h"
@@ -32,17 +33,18 @@ Paul Licameli split from AudacityProject.cpp
 #include "ProjectHistory.h"
 #include "ProjectSelectionManager.h"
 #include "ProjectSettings.h"
+#include "ProjectStatus.h"
 #include "ProjectWindow.h"
 #include "SelectUtilities.h"
 #include "SelectionState.h"
 #include "Sequence.h"
 #include "Tags.h"
+#include "TrackPanelAx.h"
 #include "TrackPanel.h"
 #include "UndoManager.h"
 #include "WaveClip.h"
 #include "WaveTrack.h"
 #include "wxFileNameWrapper.h"
-#include "effects/EffectManager.h"
 #include "blockfile/ODDecodeBlockFile.h"
 #include "export/Export.h"
 #include "import/Import.h"
@@ -118,14 +120,15 @@ auto ProjectFileManager::ReadProjectFile( const FilePath &fileName )
 
    XMLFileReader xmlFile;
 
+#ifdef EXPERIMENTAL_OD_DATA
    // 'Lossless copy' projects have dependencies. We need to always copy-in
    // these dependencies when converting to a normal project.
-   wxString oldAction =
-      gPrefs->Read(wxT("/FileFormats/CopyOrEditUncompressedData"), wxT("copy"));
+   auto oldAction = FileFormatsCopyOrEditSetting.Read();
    bool oldAsk =
       gPrefs->ReadBool(wxT("/Warnings/CopyOrEditUncompressedDataAsk"), true);
+
    if (oldAction != wxT("copy"))
-      gPrefs->Write(wxT("/FileFormats/CopyOrEditUncompressedData"), wxT("copy"));
+      FileFormatsCopyOrEditSetting.Write( wxT("copy") );
    if (oldAsk)
       gPrefs->Write(wxT("/Warnings/CopyOrEditUncompressedDataAsk"), (long) false);
    gPrefs->Flush();
@@ -133,11 +136,12 @@ auto ProjectFileManager::ReadProjectFile( const FilePath &fileName )
    auto cleanup = finally( [&] {
       // and restore old settings if necessary.
       if (oldAction != wxT("copy"))
-         gPrefs->Write(wxT("/FileFormats/CopyOrEditUncompressedData"), oldAction);
+         FileFormatsCopyOrEditSetting.Write( oldAction );
       if (oldAsk)
          gPrefs->Write(wxT("/Warnings/CopyOrEditUncompressedDataAsk"), (long) true);
       gPrefs->Flush();
    } );
+#endif
 
    bool bParseSuccess = xmlFile.Parse(&projectFileIO, fileName);
    
@@ -348,14 +352,15 @@ bool ProjectFileManager::DoSave (const bool fromSaveAs,
       safetyFileName = fileName + wxT(".bak");
 #endif
 
+      bool bOK=true;
       if (wxFileExists(safetyFileName))
-         wxRemoveFile(safetyFileName);
+         bOK = wxRemoveFile(safetyFileName);
 
       if ( !wxRenameFile(fileName, safetyFileName) ) {
          AudacityMessageBox(
             wxString::Format(
-               _("Could not create safety file: %s"), safetyFileName ),
-            _("Error"), wxICON_STOP, &window);
+               _("Audacity failed to write file %s.\nPerhaps disk is full or not writable."), safetyFileName ),
+            _("Error Writing to File"), wxICON_STOP, &window);
          return false;
       }
    }
@@ -543,8 +548,8 @@ bool ProjectFileManager::DoSave (const bool fromSaveAs,
       // cancel the cleanup:
       safetyFileName = wxT("");
 
-   window.GetStatusBar()->SetStatusText(
-      wxString::Format(_("Saved %s"), fileName), mainStatusBarField);
+   ProjectStatus::Get( proj ).Set(
+      wxString::Format(_("Saved %s"), fileName) );
 
    return true;
 }
@@ -569,7 +574,7 @@ bool ProjectFileManager::SaveCopyWaveTracks(const FilePath & strProjectPathName,
    extension = wxT("wav");
    fileFormat = wxT("WAVFLT");
 #endif
-   // Some of this is similar to code in ExportMultiple::ExportMultipleByTrack
+   // Some of this is similar to code in ExportMultipleDialog::ExportMultipleByTrack
    // but that code is really tied into the dialogs.
 
       // Copy the tracks because we're going to do some state changes before exporting.
@@ -981,7 +986,7 @@ wxArrayString ProjectFileManager::ShowOpenDialog(const wxString &extraformat, co
       /* this loop runs once per supported _format_ */
       const Format *f = &format;
 
-      wxString newfilter = f->formatName + wxT("|");
+      wxString newfilter = f->formatName.Translation() + wxT("|");
       // bung format name into string plus | separator
       for (size_t i = 0; i < f->formatExtensions.size(); i++) {
          /* this loop runs once per valid _file extension_ for file containing
@@ -1052,6 +1057,11 @@ wxArrayString ProjectFileManager::ShowOpenDialog(const wxString &extraformat, co
    for (int i = 0; i < index; i++) {
       mask = mask.AfterFirst(wxT('|')).AfterFirst(wxT('|'));
    }
+
+   // PRL:  Preference keys /DefaultOpenType and /LastOpenType, unusually,
+   // store localized strings!
+   // The bad consequences of a change of locale are not severe -- only that
+   // a default choice of file type for an open dialog is not remembered
    gPrefs->Write(wxT("/DefaultOpenType"), mask.BeforeFirst(wxT('|')));
    gPrefs->Write(wxT("/LastOpenType"), mask.BeforeFirst(wxT('|')));
    gPrefs->Flush();
@@ -1346,7 +1356,7 @@ void ProjectFileManager::OpenFile(const FilePath &fileNameArg, bool addtohistory
       SelectionBar::Get( project ).SetRate( settings.GetRate() );
 
       ProjectHistory::Get( project ).InitialState();
-      trackPanel.SetFocusedTrack( *tracks.Any().begin() );
+      TrackFocus::Get( project ).Set( *tracks.Any().begin() );
       window.HandleResize();
       trackPanel.Refresh(false);
       trackPanel.Update(); // force any repaint to happen now,
@@ -1651,7 +1661,7 @@ bool ProjectFileManager::Import(
    auto &dirManager = DirManager::Get( project );
    auto oldTags = Tags::Get( project ).shared_from_this();
    TrackHolders newTracks;
-   wxString errorMessage;
+   TranslatableString errorMessage;
 
    {
       // Backup Tags, before the import.  Be prepared to roll back changes.
@@ -1673,7 +1683,7 @@ bool ProjectFileManager::Import(
          // Error message derived from Importer::Import
          // Additional help via a Help button links to the manual.
          ShowErrorDialog(&GetProjectFrame( project ), _("Error Importing"),
-                         errorMessage, wxT("Importing_Audio"));
+                         errorMessage.Translation(), wxT("Importing_Audio"));
       }
       if (!success)
          return false;
@@ -1704,18 +1714,6 @@ bool ProjectFileManager::Import(
             pTrackArray->push_back( wt->SharedPointer< WaveTrack >() );
          });
       }
-   }
-
-   int mode = gPrefs->Read(wxT("/AudioFiles/NormalizeOnLoad"), 0L);
-   if (mode == 1) {
-      //TODO: All we want is a SelectAll()
-      SelectUtilities::SelectNone( project );
-      SelectUtilities::SelectAllIfNone( project );
-      const CommandContext context( project );
-      EffectManager::DoEffect(
-         EffectManager::Get().GetEffectByIdentifier(wxT("Normalize")),
-         context,
-         EffectManager::kConfigured);
    }
 
    // This is a no-fail:

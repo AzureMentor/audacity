@@ -528,7 +528,7 @@ void SelectionBar::OnUpdate(wxCommandEvent &evt)
 
    RegenerateTooltips();
 
-   // ToolBar::ReCreateButtons() will get rid of our sizers and controls
+   // ReCreateButtons() will get rid of our sizers and controls
    // so reset pointers first.
    for( i=0;i<5;i++)
       *Ctrls[i]=NULL;
@@ -536,7 +536,7 @@ void SelectionBar::OnUpdate(wxCommandEvent &evt)
    mRateBox = NULL;
    mRateText = NULL;
 
-   ToolBar::ReCreateButtons();
+   ReCreateButtons();
 
    ValuesToControls();
 
@@ -676,13 +676,18 @@ void SelectionBar::ValuesToControls()
 // A time has been set.  Update the control values.
 void SelectionBar::SetTimes(double start, double end, double audio)
 {
-   mStart = start;
-   mEnd = end;
-   mLength = end-start;
-   mCenter = (end+start)/2.0;
-   mAudio = audio;
+   if ( start != mStart || end != mEnd || audio != mAudio
+      || mLastSelectionMode != mSelectionMode
+   ) {
+      mStart = start;
+      mEnd = end;
+      mLength = end-start;
+      mCenter = (end+start)/2.0;
+      mAudio = audio;
+      mLastSelectionMode = mSelectionMode;
 
-   ValuesToControls();
+      ValuesToControls();
+   }
 }
 
 void SelectionBar::SetSnapTo(int snap)

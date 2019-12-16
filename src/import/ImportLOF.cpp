@@ -96,7 +96,7 @@
 
 #define BINARY_FILE_CHECK_BUFFER_SIZE 1024
 
-#define DESC _("List of Files in basic text format")
+#define DESC XO("List of Files in basic text format")
 
 static const auto exts = {
    wxT("lof")
@@ -113,7 +113,7 @@ public:
    ~LOFImportPlugin() { }
 
    wxString GetPluginStringID() override { return wxT("lof"); }
-   wxString GetPluginFormatDescription() override;
+   TranslatableString GetPluginFormatDescription() override;
    std::unique_ptr<ImportFileHandle> Open(const FilePath &Filename) override;
 
    unsigned SequenceNumber() const override;
@@ -126,7 +126,7 @@ public:
    LOFImportFileHandle(const FilePath & name, std::unique_ptr<wxTextFile> &&file);
    ~LOFImportFileHandle();
 
-   wxString GetFileDescription() override;
+   TranslatableString GetFileDescription() override;
    ByteCount GetFileUncompressedBytes() override;
    ProgressResult Import(TrackFactory *trackFactory, TrackHolders &outTracks,
               Tags *tags) override;
@@ -172,7 +172,7 @@ LOFImportFileHandle::LOFImportFileHandle
 {
 }
 
-wxString LOFImportPlugin::GetPluginFormatDescription()
+TranslatableString LOFImportPlugin::GetPluginFormatDescription()
 {
     return DESC;
 }
@@ -211,7 +211,7 @@ std::unique_ptr<ImportFileHandle> LOFImportPlugin::Open(const FilePath &filename
    return std::make_unique<LOFImportFileHandle>(filename, std::move(file));
 }
 
-wxString LOFImportFileHandle::GetFileDescription()
+TranslatableString LOFImportFileHandle::GetFileDescription()
 {
    return DESC;
 }
@@ -276,6 +276,7 @@ static Importer::RegisteredImportPlugin registered{
    std::make_unique< LOFImportPlugin >()
 };
 
+#ifdef USE_MIDI
 // return null on failure; if success, return the given project, or a NEW
 // one, if the given was null; create no NEW project if failure
 static AudacityProject *DoImportMIDIProject(
@@ -294,6 +295,7 @@ static AudacityProject *DoImportMIDIProject(
    else
       return nullptr;
 }
+#endif
 
 /** @brief Processes a single line from a LOF text file, doing whatever is
  * indicated on the line.

@@ -153,6 +153,15 @@ void AudioUnitEffectsModule::Terminate()
    return;
 }
 
+EffectFamilySymbol AudioUnitEffectsModule::GetOptionalFamilySymbol()
+{
+#if USE_AUDIO_UNITS
+   return AUDIOUNITEFFECTS_FAMILY;
+#else
+   return {};
+#endif
+}
+
 bool AudioUnitEffectsModule::AutoRegisterPlugins(PluginManagerInterface & pm)
 {
    // Nothing to be done here
@@ -500,10 +509,9 @@ void AudioUnitEffectExportDialog::PopulateOrExchange(ShuttleGui & S)
       {
          S.StartStatic(_("Presets (may select multiple)"));
          {
-            S.SetStyle(wxLC_REPORT | wxLC_HRULES | wxLC_VRULES |
-                       wxLC_NO_SORT_HEADER);
-            mList = S.AddListControlReportMode();
-            mList->InsertColumn(0, _("Preset"), wxLIST_FORMAT_LEFT);
+            mList = S.Style(wxLC_REPORT | wxLC_HRULES | wxLC_VRULES |
+                       wxLC_NO_SORT_HEADER)
+               .AddListControlReportMode( { _("Preset") } );
          }
          S.EndStatic();
       }
@@ -673,11 +681,9 @@ void AudioUnitEffectImportDialog::PopulateOrExchange(ShuttleGui & S)
       {
          S.StartStatic(_("Presets (may select multiple)"));
          {
-            S.SetStyle(wxLC_REPORT | wxLC_HRULES | wxLC_VRULES |
-                       wxLC_NO_SORT_HEADER);
-            mList = S.AddListControlReportMode();
-            mList->InsertColumn(0, _("Preset"), wxLIST_FORMAT_LEFT);
-            mList->InsertColumn(1, _("Location"), wxLIST_FORMAT_LEFT);
+            mList = S.Style(wxLC_REPORT | wxLC_HRULES | wxLC_VRULES |
+                       wxLC_NO_SORT_HEADER)
+               .AddListControlReportMode( { _("Preset"), _("Location") } );
          }
          S.EndStatic();
       }

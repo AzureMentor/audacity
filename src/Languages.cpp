@@ -34,7 +34,7 @@
 #include "Languages.h"
 #include "MemoryX.h"
 
-#include "audacity/Types.h"
+#include "Internat.h"
 
 #include <wx/defs.h>
 #include <wx/intl.h>
@@ -44,7 +44,8 @@
 
 #include <unordered_map>
 
-using LangHash = std::unordered_map<wxString, wxString>;
+using LangHash = std::unordered_map<wxString, TranslatableString>;
+using ReverseLangHash = std::unordered_map<TranslatableString, wxString>;
 
 static bool TranslationExists(const FilePaths &audacityPathList, wxString code)
 {
@@ -76,7 +77,7 @@ static bool TranslationExists(const FilePaths &audacityPathList, wxString code)
 wxString GetSystemLanguageCode()
 {
    wxArrayString langCodes;
-   wxArrayString langNames;
+   TranslatableStrings langNames;
 
    GetLanguages(langCodes, langNames);
 
@@ -127,7 +128,8 @@ wxString GetSystemLanguageCode()
    return wxT("en");
 }
 
-void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
+void GetLanguages(
+   wxArrayString &langCodes, TranslatableStrings &langNames)
 {
    static const char *const utf8Names[] = {
 "af Afrikaans",
@@ -188,19 +190,22 @@ void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
 "zh_TW \344\270\255\346\226\207\357\274\210\347\271\201\351\253\224\357\274\211",
    };
 
-   wxArrayString tempNames;
+   TranslatableStrings tempNames;
    wxArrayString tempCodes;
-   LangHash localLanguageName;
-   LangHash reverseHash;
+   ReverseLangHash reverseHash;
    LangHash tempHash;
 
-   for ( auto utf8Name : utf8Names )
-   {
-      auto str = wxString::FromUTF8(utf8Name);
-      auto code = str.BeforeFirst(' ');
-      auto name = str.AfterFirst(' ');
-      localLanguageName[code] = name;
-   }
+   const LangHash localLanguageName = []{
+      LangHash localLanguageName;
+      for ( auto utf8Name : utf8Names )
+      {
+         auto str = wxString::FromUTF8(utf8Name);
+         auto code = str.BeforeFirst(' ');
+         auto name = str.AfterFirst(' ');
+         localLanguageName[code] = TranslatableString{ name };
+      }
+      return localLanguageName;
+   }();
 
    auto audacityPathList = FileNames::AudacityPathList();
 
@@ -213,9 +218,8 @@ void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
 
    // For each language in our list we look for a corresponding entry in
    // wxLocale.  
-   for (LangHash::iterator i = localLanguageName.begin();
-        i != localLanguageName.end();
-        i++)
+   for ( auto end = localLanguageName.end(), i = localLanguageName.begin();
+      i != end; ++i )
    {
       const wxLanguageInfo *info = wxLocale::FindLanguageInfo(i->first);
 
@@ -226,7 +230,7 @@ void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
 
       wxString fullCode = info->CanonicalName;
       wxString code = fullCode.Left(2);
-      wxString name = info->Description;
+      TranslatableString name{ info->Description };
 
       // Logic: Languages codes are sometimes hierarchical, with a
       // general language code and then a subheading.  For example,
@@ -242,11 +246,13 @@ void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
       if (fullCode.length() < 2)
          continue;
 
-      if (!localLanguageName[code].empty()) {
-         name = localLanguageName[code];
+      auto found = localLanguageName.find( code );
+      if ( found != end ) {
+         name = found->second;
       }
-      if (!localLanguageName[fullCode].empty()) {
-         name = localLanguageName[fullCode];
+      found = localLanguageName.find( fullCode );
+      if ( found != end ) {
+         name = found->second;
       }
 
       if (TranslationExists(audacityPathList, fullCode)) {
@@ -271,9 +277,8 @@ void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
    // JKC: Adding language for simplified audacity.
    {
       wxString code;
-      wxString name;
       code = wxT("en-simple");
-      name = wxT("Simplified");
+      auto name = XO("Simplified");
       if (TranslationExists(audacityPathList, code) ) {
          tempCodes.push_back(code);
          tempNames.push_back(name);
@@ -288,11 +293,14 @@ void GetLanguages(wxArrayString &langCodes, wxArrayString &langNames)
       reverseHash[tempNames[j]] = tempCodes[j];
    }
 
-   std::sort( tempNames.begin(), tempNames.end() );
+   std::sort( tempNames.begin(), tempNames.end(),
+      []( const TranslatableString &a, const TranslatableString &b ){
+         return a.Translation() < b.Translation();
+      } );
 
    // Add system language
-   langNames.push_back(wxT("System"));
-   langCodes.push_back(wxT(""));
+   langNames.push_back(XO("System"));
+   langCodes.push_back(wxT("System"));
 
    for(j=0; j<tempNames.size(); j++) {
       langNames.push_back(tempNames[j]);

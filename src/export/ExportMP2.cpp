@@ -33,7 +33,6 @@
 */
 
 #include "../Audacity.h"// for USE_* macros
-#include "ExportMP2.h"
 
 #ifdef USE_LIBTWOLAME
 
@@ -76,11 +75,50 @@
 // ExportMP2Options
 //----------------------------------------------------------------------------
 
-static int iBitrates[] = {
-   16, 24, 32, 40, 48, 56, 64,
-   80, 96, 112, 128, 160,
-   192, 224, 256, 320, 384
+namespace {
+
+const TranslatableStrings BitRateNames {
+   // i18n-hint kbps abbreviates "thousands of bits per second"
+   XO("16 kbps"),
+   XO("24 kbps"),
+   XO("32 kbps"),
+   XO("40 kbps"),
+   XO("48 kbps"),
+   XO("56 kbps"),
+   XO("64 kbps"),
+   XO("80 kbps"),
+   XO("96 kbps"),
+   XO("112 kbps"),
+   XO("128 kbps"),
+   XO("160 kbps"),
+   XO("192 kbps"),
+   XO("224 kbps"),
+   XO("256 kbps"),
+   XO("320 kbps"),
+   XO("384 kbps"),
 };
+
+const std::vector< int > BitRateValues {
+   16,
+   24,
+   32,
+   40,
+   48,
+   56,
+   64,
+   80,
+   96,
+   112,
+   128,
+   160,
+   192,
+   224,
+   256,
+   320,
+   384,
+};
+
+}
 
 class ExportMP2Options final : public wxPanelWrapper
 {
@@ -91,10 +129,6 @@ public:
    void PopulateOrExchange(ShuttleGui & S);
    bool TransferDataToWindow() override;
    bool TransferDataFromWindow() override;
-
-private:
-   wxArrayStringEx mBitRateNames;
-   std::vector<int> mBitRateLabels;
 };
 
 ///
@@ -102,12 +136,6 @@ private:
 ExportMP2Options::ExportMP2Options(wxWindow *parent, int WXUNUSED(format))
 :  wxPanelWrapper(parent, wxID_ANY)
 {
-   for (unsigned int i=0; i < (sizeof(iBitrates)/sizeof(int)); i++)
-   {
-      mBitRateNames.push_back(wxString::Format(_("%i kbps"),iBitrates[i]));
-      mBitRateLabels.push_back(iBitrates[i]);
-   }
-
    ShuttleGui S(this, eIsCreatingFromPrefs);
    PopulateOrExchange(S);
 
@@ -131,8 +159,13 @@ void ExportMP2Options::PopulateOrExchange(ShuttleGui & S)
       {
          S.StartMultiColumn(2, wxCENTER);
          {
-            S.TieChoice(_("Bit Rate:"), wxT("/FileFormats/MP2Bitrate"),
-               160, mBitRateNames, mBitRateLabels);
+            S.TieNumberAsChoice(
+               _("Bit Rate:"),
+               {wxT("/FileFormats/MP2Bitrate"),
+                160},
+               BitRateNames,
+               &BitRateValues
+            );
          }
          S.EndMultiColumn();
       }
@@ -176,13 +209,15 @@ public:
    ProgressResult Export(AudacityProject *project,
                std::unique_ptr<ProgressDialog> &pDialog,
                unsigned channels,
-               const wxString &fName,
+               const wxFileNameWrapper &fName,
                bool selectedOnly,
                double t0,
                double t1,
                MixerSpec *mixerSpec = NULL,
                const Tags *metadata = NULL,
                int subformat = 0) override;
+
+   virtual unsigned SequenceNumber() const override { return 50; }
 
 private:
 
@@ -201,12 +236,12 @@ ExportMP2::ExportMP2()
    AddExtension(wxT("mp2"),0);
    SetMaxChannels(2,0);
    SetCanMetaData(true,0);
-   SetDescription(_("MP2 Files"),0);
+   SetDescription(XO("MP2 Files"),0);
 }
 
 ProgressResult ExportMP2::Export(AudacityProject *project,
    std::unique_ptr<ProgressDialog> &pDialog,
-   unsigned channels, const wxString &fName,
+   unsigned channels, const wxFileNameWrapper &fName,
    bool selectionOnly, double t0, double t1, MixerSpec *mixerSpec, const Tags *metadata,
    int WXUNUSED(subformat))
 {
@@ -272,12 +307,12 @@ ProgressResult ExportMP2::Export(AudacityProject *project,
          stereo ? 2 : 1, pcmBufferSize, true,
          rate, int16Sample, true, mixerSpec);
 
-      InitProgress( pDialog, wxFileName(fName).GetName(),
+      InitProgress( pDialog, fName,
          selectionOnly
-            ? wxString::Format(_("Exporting selected audio at %ld kbps"),
-               bitrate)
-            : wxString::Format(_("Exporting the audio at %ld kbps"),
-               bitrate) );
+            ? XO("Exporting selected audio at %ld kbps")
+                 .Format( bitrate )
+            : XO("Exporting the audio at %ld kbps")
+                 .Format( bitrate ) );
       auto &progress = *pDialog;
 
       while (updateResult == ProgressResult::Success) {
@@ -462,10 +497,8 @@ void ExportMP2::AddFrame(struct id3_tag *tp, const wxString & n, const wxString 
 }
 #endif
 
-std::unique_ptr<ExportPlugin> New_ExportMP2()
-{
-   return std::make_unique<ExportMP2>();
-}
+static Exporter::RegisteredExportPlugin
+sRegisteredPlugin{ []{ return std::make_unique< ExportMP2 >(); } };
 
 #endif // #ifdef USE_LIBTWOLAME
 

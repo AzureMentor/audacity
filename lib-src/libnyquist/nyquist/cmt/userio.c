@@ -153,6 +153,10 @@ extern int debug;
 #include "xlisp.h"
 #endif
 
+int     IOinputfd;      /* input file descriptor (usually 0) */
+
+int     IOnochar;       /* Value to be returned by IOgetchar()
+                           where there is no input to be had */
 
 /****************************************************************************
 *
@@ -1131,7 +1135,7 @@ char *c;
         if ((*c) == '\r')
                 (*c) = '\n';
         return(ret);
-#else /* UNIX_MACH */
+#else /* __APPLE__ */
 #ifndef BUFFERED_SYNCHRONOUS_INPUT
     int input = IOgetchar();
     if (input != IOnochar) {
@@ -1141,7 +1145,7 @@ char *c;
     }
 #endif /* BUFFERED_SYNCHRONOUS_INPUT */
     return FALSE;
-#endif /* UNIX_MACH */
+#endif /* __APPLE__ */
 }
 #endif
 
@@ -1246,7 +1250,7 @@ public int wait_ascii()
         gflush();
         getrlimit(RLIMIT_NOFILE, &file_limit);
         select(file_limit.rlim_max+1, &readfds, 0, 0, NULL);
-#endif /* !UNIX_MACH */
+#endif /* !__APPLE__ */
 #endif /* ifdef UNIX */
     }
     return (int) c;

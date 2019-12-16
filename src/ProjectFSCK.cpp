@@ -77,7 +77,7 @@ int ProjectFSCK(
       wxEmptyString,          // All files
       true, false,
       dm.NumBlockFiles(),  // rough guess of how many BlockFiles will be found/processed, for progress
-      _("Inspecting project file data"));
+      XO("Inspecting project file data"));
 
    //
    // MISSING ALIASED AUDIO FILES
@@ -360,9 +360,9 @@ other projects. \
    if ((nResult != FSCKstatus_CLOSE_REQ) && !ODManager::HasLoadedODFlag())
    {
       // Remove any empty directories.
-      ProgressDialog pProgress
-         (_("Progress"),
-         _("Cleaning up unused directories in project data"));
+      ProgressDialog pProgress(
+         XO("Progress"),
+         XO("Cleaning up unused directories in project data"));
       // nDirCount is for updating pProgress. +1 because we may DELETE dirPath.
       int nDirCount = DirManager::RecursivelyCountSubdirs(dirPath) + 1;
       DirManager::RecursivelyRemoveEmptyDirs(dirPath, nDirCount, &pProgress);
@@ -381,7 +381,7 @@ other projects. \
       // In auto-recover mode, we didn't do any ShowMultiDialog calls above, so put up an alert.
       if (bAutoRecoverMode)
          ::AudacityMessageBox(
-            _("Project check found file inconsistencies during automatic recovery.\n\nSelect 'Show Log...' in the Help menu to see details."),
+            _("Project check found file inconsistencies during automatic recovery.\n\nSelect 'Help > Diagnostics > Show Log...' to see details."),
             _("Warning: Problems in Automatic Recovery"),
             wxOK  | wxICON_EXCLAMATION);
    }

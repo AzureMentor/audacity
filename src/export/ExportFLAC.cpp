@@ -21,7 +21,6 @@ and libvorbis examples, Monty <monty@xiph.org>
 #include "../Audacity.h" // for USE_* macros
 
 #ifdef USE_LIBFLAC
-#include "ExportFLAC.h"
 
 #include "Export.h"
 
@@ -42,6 +41,7 @@ and libvorbis examples, Monty <monty@xiph.org>
 
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/ProgressDialog.h"
+#include "../wxFileNameWrapper.h"
 
 //----------------------------------------------------------------------------
 // ExportFLACOptions Class
@@ -77,54 +77,58 @@ ExportFLACOptions::~ExportFLACOptions()
    TransferDataFromWindow();
 }
 
+ChoiceSetting FLACBitDepth{
+   wxT("/FileFormats/FLACBitDepth"),
+   {
+      ByColumns,
+      { XO("16 bit") , XO("24 bit") , },
+      { wxT("16") ,    wxT("24") , }
+   },
+   0 // "16",
+};
+
+ChoiceSetting FLACLevel{
+   wxT("/FileFormats/FLACLevel"),
+   {
+      ByColumns,
+      {
+         XO("0 (fastest)") ,
+         XO("1") ,
+         XO("2") ,
+         XO("3") ,
+         XO("4") ,
+         XO("5") ,
+         XO("6") ,
+         XO("7") ,
+         XO("8 (best)") ,
+      },
+      {
+         wxT("0") ,
+         wxT("1") ,
+         wxT("2") ,
+         wxT("3") ,
+         wxT("4") ,
+         wxT("5") ,
+         wxT("6") ,
+         wxT("7") ,
+         wxT("8") ,
+      }
+   },
+   5 //"5"
+};
+
 ///
 ///
 void ExportFLACOptions::PopulateOrExchange(ShuttleGui & S)
 {
-   wxArrayStringEx flacLevelLabels{
-      wxT("0") ,
-      wxT("1") ,
-      wxT("2") ,
-      wxT("3") ,
-      wxT("4") ,
-      wxT("5") ,
-      wxT("6") ,
-      wxT("7") ,
-      wxT("8") ,
-   };
-
-   wxArrayStringEx flacLevelNames{
-      _("0 (fastest)") ,
-      _("1") ,
-      _("2") ,
-      _("3") ,
-      _("4") ,
-      _("5") ,
-      _("6") ,
-      _("7") ,
-      _("8 (best)") ,
-   };
-
-   wxArrayStringEx flacBitDepthLabels{
-      wxT("16") ,
-      wxT("24") ,
-   };
-
-   wxArrayStringEx flacBitDepthNames{
-      _("16 bit") ,
-      _("24 bit") ,
-   };
-
    S.StartVerticalLay();
    {
       S.StartHorizontalLay(wxCENTER);
       {
          S.StartMultiColumn(2, wxCENTER);
          {
-            S.TieChoice(_("Level:"), wxT("/FileFormats/FLACLevel"),
-                        wxT("5"), flacLevelNames, flacLevelLabels);
-            S.TieChoice(_("Bit depth:"), wxT("/FileFormats/FLACBitDepth"),
-                        wxT("16"), flacBitDepthNames, flacBitDepthLabels);
+            S.TieChoice( _("Level:"), FLACLevel);
+            S.TieChoice( _("Bit depth:"), FLACBitDepth);
          }
          S.EndMultiColumn();
       }
@@ -212,13 +216,15 @@ public:
    ProgressResult Export(AudacityProject *project,
                std::unique_ptr<ProgressDialog> &pDialog,
                unsigned channels,
-               const wxString &fName,
+               const wxFileNameWrapper &fName,
                bool selectedOnly,
                double t0,
                double t1,
                MixerSpec *mixerSpec = NULL,
                const Tags *metadata = NULL,
                int subformat = 0) override;
+
+   virtual unsigned SequenceNumber() const override { return 40; }
 
 private:
 
@@ -238,13 +244,13 @@ ExportFLAC::ExportFLAC()
    AddExtension(wxT("flac"),0);
    SetMaxChannels(FLAC__MAX_CHANNELS,0);
    SetCanMetaData(true,0);
-   SetDescription(_("FLAC Files"),0);
+   SetDescription(XO("FLAC Files"),0);
 }
 
 ProgressResult ExportFLAC::Export(AudacityProject *project,
                         std::unique_ptr<ProgressDialog> &pDialog,
                         unsigned numChannels,
-                        const wxString &fName,
+                        const wxFileNameWrapper &fName,
                         bool selectionOnly,
                         double t0,
                         double t1,
@@ -259,11 +265,10 @@ ProgressResult ExportFLAC::Export(AudacityProject *project,
    wxLogNull logNo;            // temporarily disable wxWidgets error messages
    auto updateResult = ProgressResult::Success;
 
-   int levelPref;
-   gPrefs->Read(wxT("/FileFormats/FLACLevel"), &levelPref, 5);
+   long levelPref;
+   FLACLevel.Read().ToLong( &levelPref );
 
-   wxString bitDepthPref =
-      gPrefs->Read(wxT("/FileFormats/FLACBitDepth"), wxT("16"));
+   auto bitDepthPref = FLACBitDepth.Read();
 
    FLAC::Encoder::File encoder;
 
@@ -339,8 +344,9 @@ ProgressResult ExportFLAC::Export(AudacityProject *project,
    encoder.init();
 #else
    wxFFile f;     // will be closed when it goes out of scope
-   if (!f.Open(fName, wxT("w+b"))) {
-      AudacityMessageBox(wxString::Format(_("FLAC export couldn't open %s"), fName));
+   const auto path = fName.GetFullPath();
+   if (!f.Open(path, wxT("w+b"))) {
+      AudacityMessageBox(wxString::Format(_("FLAC export couldn't open %s"), path));
       return ProgressResult::Cancelled;
    }
 
@@ -373,10 +379,10 @@ ProgressResult ExportFLAC::Export(AudacityProject *project,
 
    ArraysOf<FLAC__int32> tmpsmplbuf{ numChannels, SAMPLES_PER_RUN, true };
 
-   InitProgress( pDialog, wxFileName(fName).GetName(),
+   InitProgress( pDialog, fName,
       selectionOnly
-         ? _("Exporting the selected audio as FLAC")
-         : _("Exporting the audio as FLAC") );
+         ? XO("Exporting the selected audio as FLAC")
+         : XO("Exporting the audio as FLAC") );
    auto &progress = *pDialog;
 
    while (updateResult == ProgressResult::Success) {
@@ -467,10 +473,8 @@ bool ExportFLAC::GetMetadata(AudacityProject *project, const Tags *tags)
    return true;
 }
 
-std::unique_ptr<ExportPlugin> New_ExportFLAC()
-{
-   return std::make_unique<ExportFLAC>();
-}
+static Exporter::RegisteredExportPlugin
+sRegisteredPlugin{ []{ return std::make_unique< ExportFLAC >(); } };
 
 #endif // USE_LIBFLAC
 

@@ -18,7 +18,6 @@ modelled on BuiltinEffectsModule
 
 #include "../Prefs.h"
 
-#include "../effects/EffectManager.h"
 #include "Demo.h"
 #include "../commands/MessageCommand.h"
 #include "../commands/ScreenshotCommand.h"
@@ -223,6 +222,12 @@ void BuiltinCommandsModule::Terminate()
 {
    // Nothing to do here
    return;
+}
+
+EffectFamilySymbol BuiltinCommandsModule::GetOptionalFamilySymbol()
+{
+   // Commands are not enabled and disabled in EffectsPrefs
+   return {};
 }
 
 const FileExtensions &BuiltinCommandsModule::GetFileExtensions()

@@ -115,8 +115,8 @@ void DevicePrefs::GetNamesAndLabels()
       const PaDeviceInfo *info = Pa_GetDeviceInfo(i);
       if ((info!=NULL)&&(info->maxOutputChannels > 0 || info->maxInputChannels > 0)) {
          wxString name = wxSafeConvertMB2WX(Pa_GetHostApiInfo(info->hostApi)->name);
-         if ( ! make_iterator_range( mHostNames ).contains( name ) ) {
-            mHostNames.push_back(name);
+         if (!make_iterator_range(mHostNames).contains(TranslatableString{name})) {
+            mHostNames.push_back( TranslatableString{ name } );
             mHostLabels.push_back(name);
          }
       }
@@ -133,11 +133,12 @@ void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
       S.StartMultiColumn(2);
       {
          S.Id(HostID);
-         mHost = S.TieChoice(_("&Host:"),
-                             wxT("/AudioIO/Host"),
-                             wxT(""),
-                             mHostNames,
-                             mHostLabels);
+         mHost = S.TieChoice( _("&Host:"),
+            {
+               wxT("/AudioIO/Host"),
+               { ByColumns, mHostNames, mHostLabels }
+            }
+         );
 
          S.AddPrompt(_("Using:"));
          S.AddFixedText(wxString(wxSafeConvertMB2WX(Pa_GetVersionText())));
@@ -184,19 +185,21 @@ void DevicePrefs::PopulateOrExchange(ShuttleGui & S)
          wxTextCtrl *w;
          // only show the following controls if we use Portaudio v19, because
          // for Portaudio v18 we always use default buffer sizes
-         w = S.TieNumericTextBox(_("&Buffer length:"),
-                                 wxT("/AudioIO/LatencyDuration"),
-                                 DEFAULT_LATENCY_DURATION,
+         w = S
+            .NameSuffix(XO("milliseconds"))
+            .TieNumericTextBox(_("&Buffer length:"),
+                                 {wxT("/AudioIO/LatencyDuration"),
+                                  DEFAULT_LATENCY_DURATION},
                                  9);
          S.AddUnits(_("milliseconds"));
-         if( w ) w->SetName(w->GetName() + wxT(" ") + _("milliseconds"));
 
-         w = S.TieNumericTextBox(_("&Latency compensation:"),
-                                 wxT("/AudioIO/LatencyCorrection"),
-                                 DEFAULT_LATENCY_CORRECTION,
+         w = S
+            .NameSuffix(XO("milliseconds"))
+            .TieNumericTextBox(_("&Latency compensation:"),
+                                 {wxT("/AudioIO/LatencyCorrection"),
+                                  DEFAULT_LATENCY_CORRECTION},
                                  9);
          S.AddUnits(_("milliseconds"));
-         if( w ) w->SetName(w->GetName() + wxT(" ") + _("milliseconds"));
       }
       S.EndThreeColumn();
    }
@@ -213,7 +216,7 @@ void DevicePrefs::OnHost(wxCommandEvent & e)
 
    // Find the index for the host API selected
    int index = -1;
-   wxString apiName = mHostNames[mHost->GetCurrentSelection()];
+   auto apiName = mHostLabels[mHost->GetCurrentSelection()];
    int nHosts = Pa_GetHostApiCount();
    for (int i = 0; i < nHosts; ++i) {
       wxString name = wxSafeConvertMB2WX(Pa_GetHostApiInfo(i)->name);
@@ -312,9 +315,8 @@ void DevicePrefs::OnHost(wxCommandEvent & e)
       }
    }
 
-   ShuttleGui S(this, eIsCreating);
-   S.SetSizeHints(mPlay, mPlay->GetStrings());
-   S.SetSizeHints(mRecord, mRecord->GetStrings());
+   ShuttleGui::SetMinSize(mPlay, mPlay->GetStrings());
+   ShuttleGui::SetMinSize(mRecord, mRecord->GetStrings());
    OnDevice(e);
 }
 
@@ -378,8 +380,7 @@ void DevicePrefs::OnDevice(wxCommandEvent & WXUNUSED(event))
       mChannels->SetSelection(0);
    }
 
-   ShuttleGui S(this, eIsCreating);
-   S.SetSizeHints(mChannels, channelnames);
+   ShuttleGui::SetMinSize(mChannels, channelnames);
    Layout();
 }
 

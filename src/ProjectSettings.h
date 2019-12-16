@@ -60,7 +60,9 @@ public:
       ChangedSyncLock,
    };
 
-   ProjectSettings( AudacityProject &project );
+   explicit ProjectSettings( AudacityProject &project );
+   ProjectSettings( const ProjectSettings & ) PROHIBITED;
+   ProjectSettings &operator=( const ProjectSettings & ) PROHIBITED;
 
    sampleFormat GetDefaultFormat() const { return mDefaultFormat; }
 
@@ -72,9 +74,6 @@ public:
 
    bool GetShowId3Dialog() const { return mShowId3Dialog; } //lda
    void SetShowId3Dialog(bool flag) { mShowId3Dialog = flag; } //lda
-
-   bool GetNormalizeOnLoad() const { return mNormalizeOnLoad; } //lda
-   void SetNormalizeOnLoad(bool flag) { mNormalizeOnLoad = flag; } //lda
 
    bool IsSyncLocked() const;
    void SetSyncLock(bool flag);
@@ -139,7 +138,6 @@ private:
    
    bool mTracksFitVerticallyZoomed{ false };  //lda
    bool mShowId3Dialog{ true }; //lda
-   bool mNormalizeOnLoad;  //lda
    bool mIsSyncLocked{ false };
    bool mEmptyCanBeDirty;
    bool mShowSplashScreen;

@@ -32,26 +32,21 @@
 
 //////////
 
-static const EnumValueSymbol choicesFormat[] = {
-   { wxT("Format16Bit"), XO("16-bit") },
-   { wxT("Format24Bit"), XO("24-bit") },
-   { wxT("Format32BitFloat"), XO("32-bit float") }
-};
-static const size_t nChoicesFormat = WXSIZEOF( choicesFormat );
-static const int intChoicesFormat[] = {
-   int16Sample,
-   int24Sample,
-   floatSample
-};
-static_assert( nChoicesFormat == WXSIZEOF(intChoicesFormat), "size mismatch" );
-
-static const size_t defaultChoiceFormat = 2; // floatSample
-
-static EnumSetting formatSetting{
+static EnumSetting< sampleFormat > formatSetting{
    wxT("/SamplingRate/DefaultProjectSampleFormatChoice"),
-   choicesFormat, nChoicesFormat, defaultChoiceFormat,
-   
-   intChoicesFormat,
+   {
+      { wxT("Format16Bit"), XO("16-bit") },
+      { wxT("Format24Bit"), XO("24-bit") },
+      { wxT("Format32BitFloat"), XO("32-bit float") }
+   },
+   2, // floatSample
+
+   // for migrating old preferences:
+   {
+      int16Sample,
+      int24Sample,
+      floatSample
+   },
    wxT("/SamplingRate/DefaultProjectSampleFormat"),
 };
 
@@ -129,10 +124,10 @@ void QualityPrefs::GetNamesAndLabels()
    for (int i = 0; i < AudioIOBase::NumStandardRates; i++) {
       int iRate = AudioIOBase::StandardRates[i];
       mSampleRateLabels.push_back(iRate);
-      mSampleRateNames.push_back(wxString::Format(wxT("%i Hz"), iRate));
+      mSampleRateNames.push_back( XO("%i Hz").Format( iRate ) );
    }
 
-   mSampleRateNames.push_back(_("Other..."));
+   mSampleRateNames.push_back(XO("Other..."));
 
    // The label for the 'Other...' case can be any value at all.
    mSampleRateLabels.push_back(44100); // If chosen, this value will be overwritten
@@ -151,18 +146,19 @@ void QualityPrefs::PopulateOrExchange(ShuttleGui & S)
 
          S.StartMultiColumn(2);
          {
-            // If the value in Prefs isn't in the list, then we want
-            // the last item, 'Other...' to be shown.
-            S.SetNoMatchSelector(mSampleRateNames.size() - 1);
             // First the choice...
             // We make sure it uses the ID we want, so that we get changes
             S.Id(ID_SAMPLE_RATE_CHOICE);
             // We make sure we have a pointer to it, so that we can drive it.
             mSampleRates = S.TieNumberAsChoice( {},
-                                       wxT("/SamplingRate/DefaultProjectSampleRate"),
-                                       AudioIOBase::GetOptimalSupportedSampleRate(),
+                                       {wxT("/SamplingRate/DefaultProjectSampleRate"),
+                                        AudioIOBase::GetOptimalSupportedSampleRate()},
                                        mSampleRateNames,
-                                       mSampleRateLabels);
+                                       &mSampleRateLabels,
+                                       // If the value in Prefs isn't in the list, then we want
+                                       // the last item, 'Other...' to be shown.
+                                       mSampleRateNames.size() - 1
+                                       );
 
             // Now do the edit box...
             mOtherSampleRate = S.TieNumericTextBox( {},
@@ -246,6 +242,6 @@ QualityPrefsFactory = [](wxWindow *parent, wxWindowID winid)
 
 sampleFormat QualityPrefs::SampleFormatChoice()
 {
-   return (sampleFormat)formatSetting.ReadInt();
+   return formatSetting.ReadEnum();
 }
 

@@ -18,6 +18,7 @@
 #include "../effects/Contrast.h"
 #include "../effects/EffectManager.h"
 #include "../effects/RealtimeEffectManager.h"
+#include "../prefs/EffectsPrefs.h"
 
 // private helper classes and functions
 namespace {
@@ -35,7 +36,7 @@ AudacityProject::AttachedWindows::RegisteredFactory sContrastDialogKey{
 AudacityProject::AttachedWindows::RegisteredFactory sFrequencyWindowKey{
    []( AudacityProject &parent ) -> wxWeakRef< wxWindow > {
       auto &window = ProjectWindow::Get( parent );
-      return safenew FreqWindow(
+      return safenew FrequencyPlotDialog(
          &window, -1, _("Frequency Analysis"),
          wxPoint{ 150, 150 }
       );
@@ -73,8 +74,8 @@ bool CompareEffectsByPublisher(
    const PluginDescriptor *a, const PluginDescriptor *b)
 {
    auto &em = EffectManager::Get();
-   auto akey = em.GetVendorName(a->GetID());
-   auto bkey = em.GetVendorName(b->GetID());
+   auto akey = em.GetVendorName(a->GetID()).Translation();
+   auto bkey = em.GetVendorName(b->GetID()).Translation();
 
    if (akey.empty())
    {
@@ -98,8 +99,8 @@ bool CompareEffectsByPublisherAndName(
    const PluginDescriptor *a, const PluginDescriptor *b)
 {
    auto &em = EffectManager::Get();
-   auto akey = em.GetVendorName(a->GetID());
-   auto bkey = em.GetVendorName(b->GetID());
+   auto akey = em.GetVendorName(a->GetID()).Translation();
+   auto bkey = em.GetVendorName(b->GetID()).Translation();
 
    if (a->IsEffectDefault())
    {
@@ -123,8 +124,8 @@ bool CompareEffectsByTypeAndName(
    const PluginDescriptor *a, const PluginDescriptor *b)
 {
    auto &em = EffectManager::Get();
-   auto akey = em.GetEffectFamilyName(a->GetID());
-   auto bkey = em.GetEffectFamilyName(b->GetID());
+   auto akey = em.GetEffectFamilyName(a->GetID()).Translation();
+   auto bkey = em.GetEffectFamilyName(b->GetID()).Translation();
 
    if (akey.empty())
    {
@@ -156,8 +157,8 @@ bool CompareEffectsByTypeAndName(
 bool CompareEffectsByType(const PluginDescriptor *a, const PluginDescriptor *b)
 {
    auto &em = EffectManager::Get();
-   auto akey = em.GetEffectFamilyName(a->GetID());
-   auto bkey = em.GetEffectFamilyName(b->GetID());
+   auto akey = em.GetEffectFamilyName(a->GetID()).Translation();
+   auto bkey = em.GetEffectFamilyName(b->GetID()).Translation();
 
    if (akey.empty())
    {
@@ -180,8 +181,7 @@ bool CompareEffectsByType(const PluginDescriptor *a, const PluginDescriptor *b)
 // Forward-declared function has its definition below with OnEffect in view
 void AddEffectMenuItemGroup(
    MenuTable::BaseItemPtrs &table,
-   const wxArrayString & names,
-   const std::vector<bool> &vHasDialog,
+   const TranslatableStrings & names,
    const PluginIDs & plugs,
    const std::vector<CommandFlag> & flags,
    bool isDefault);
@@ -195,7 +195,7 @@ void AddEffectMenuItems(
 {
    size_t pluginCnt = plugs.size();
 
-   wxString groupBy = gPrefs->Read(wxT("/Effects/GroupBy"), wxT("sortby:name"));
+   auto groupBy = EffectsGroupBy.Read();
 
    bool grouped = false;
    if (groupBy.StartsWith(wxT("groupby")))
@@ -203,33 +203,38 @@ void AddEffectMenuItems(
       grouped = true;
    }
 
-   std::vector<bool> vHasDialog;
-   wxArrayString groupNames;
+   // Some weird special case stuff just for Noise Reduction so that there is
+   // more informative help
+   const auto getBatchFlags = [&]( const PluginDescriptor *plug ){
+      if ( plug->GetSymbol().Msgid() == XO( "Noise Reduction" ) )
+         return
+            ( batchflags | NoiseReductionTimeSelectedFlag ) & ~TimeSelectedFlag;
+      return batchflags;
+   };
+
+   TranslatableStrings groupNames;
    PluginIDs groupPlugs;
    std::vector<CommandFlag> groupFlags;
    if (grouped)
    {
-      wxString last;
-      wxString current;
+      TranslatableString last;
+      TranslatableString current;
 
       for (size_t i = 0; i < pluginCnt; i++)
       {
          const PluginDescriptor *plug = plugs[i];
 
-         bool hasDialog = plug->GetSymbol().Msgid().Contains("...");
-         auto name = plug->GetSymbol().Translation();
+         auto name = plug->GetSymbol().Msgid();
 
          if (plug->IsEffectInteractive())
-         {
-            name += wxT("...");
-         }
+            name += XO("...");
 
          if (groupBy == wxT("groupby:publisher"))
          {
             current = EffectManager::Get().GetVendorName(plug->GetID());
             if (current.empty())
             {
-               current = _("Unknown");
+               current = XO("Unknown");
             }
          }
          else if (groupBy == wxT("groupby:type"))
@@ -237,7 +242,7 @@ void AddEffectMenuItems(
             current = EffectManager::Get().GetEffectFamilyName(plug->GetID());
             if (current.empty())
             {
-               current = _("Unknown");
+               current = XO("Unknown");
             }
          }
 
@@ -248,25 +253,23 @@ void AddEffectMenuItems(
             bool bInSubmenu = !last.empty() && (groupNames.size() > 1);
 
             AddEffectMenuItemGroup(temp,
-               groupNames, vHasDialog,
+               groupNames,
                groupPlugs, groupFlags, isDefault);
 
             table.push_back( MenuOrItems(
-               ( bInSubmenu ? last : wxString{} ), std::move( temp )
+               ( bInSubmenu ? last : TranslatableString{} ), std::move( temp )
             ) );
 
             groupNames.clear();
-            vHasDialog.clear();
             groupPlugs.clear();
             groupFlags.clear();
             last = current;
          }
 
-         groupNames.push_back(name);
-         vHasDialog.push_back(hasDialog);
+         groupNames.push_back( name );
          groupPlugs.push_back(plug->GetID());
          groupFlags.push_back(
-            plug->IsEffectRealtime() ? realflags : batchflags);
+            plug->IsEffectRealtime() ? realflags : getBatchFlags( plug ) );
       }
 
       if (groupNames.size() > 0)
@@ -276,10 +279,10 @@ void AddEffectMenuItems(
          bool bInSubmenu = groupNames.size() > 1;
 
          AddEffectMenuItemGroup(temp,
-            groupNames, vHasDialog, groupPlugs, groupFlags, isDefault);
+            groupNames, groupPlugs, groupFlags, isDefault);
 
          table.push_back( MenuOrItems(
-            ( bInSubmenu ? current : wxString{} ), std::move( temp )
+            ( bInSubmenu ? current : TranslatableString{} ), std::move( temp )
          ) );
       }
    }
@@ -289,15 +292,12 @@ void AddEffectMenuItems(
       {
          const PluginDescriptor *plug = plugs[i];
 
-         bool hasDialog = plug->GetSymbol().Msgid().Contains("...");
-         auto name = plug->GetSymbol().Translation();
+         auto name = plug->GetSymbol().Msgid();
 
          if (plug->IsEffectInteractive())
-         {
-            name += wxT("...");
-         }
+            name += XO("...");
 
-         wxString group;
+         TranslatableString group;
          if (groupBy == wxT("sortby:publisher:name"))
          {
             group = EffectManager::Get().GetVendorName(plug->GetID());
@@ -309,24 +309,24 @@ void AddEffectMenuItems(
 
          if (plug->IsEffectDefault())
          {
-            group = wxEmptyString;
+            group = {};
          }
 
-         if (!group.empty())
-         {
-            group += wxT(": ");
-         }
+         groupNames.push_back(
+            group.empty()
+               ? name
+               : XO("%s: %s").Format( group, name )
+         );
 
-         groupNames.push_back(group + name);
-         vHasDialog.push_back(hasDialog);
          groupPlugs.push_back(plug->GetID());
-         groupFlags.push_back(plug->IsEffectRealtime() ? realflags : batchflags);
+         groupFlags.push_back(
+            plug->IsEffectRealtime() ? realflags : getBatchFlags( plug ) );
       }
 
       if (groupNames.size() > 0)
       {
          AddEffectMenuItemGroup(
-            table, groupNames, vHasDialog, groupPlugs, groupFlags, isDefault);
+            table, groupNames, groupPlugs, groupFlags, isDefault);
       }
 
    }
@@ -372,7 +372,7 @@ MenuTable::BaseItemPtrs PopulateEffectsMenu(
       plug = pm.GetNextPluginForEffectType(type);
    }
 
-   wxString groupby = gPrefs->Read(wxT("/Effects/GroupBy"), wxT("sortby:name"));
+   wxString groupby = EffectsGroupBy.Read();
 
    using Comparator = bool(*)(const PluginDescriptor*, const PluginDescriptor*);
    Comparator comp1, comp2;
@@ -464,7 +464,7 @@ void OnPlotSpectrum(const CommandContext &context)
 {
    auto &project = context.project;
    auto freqWindow =
-      &project.AttachedWindows::Get< FreqWindow >( sFrequencyWindowKey );
+      &project.AttachedWindows::Get< FrequencyPlotDialog >( sFrequencyWindowKey );
 
    if( ScreenshotCommand::MayCapture( freqWindow ) )
       return;
@@ -584,15 +584,13 @@ static CommandHandlerObject &findCommandHandler(AudacityProject &) {
 
 #define FN(X) findCommandHandler, \
    static_cast<CommandFunctorPointer>(& PluginActions::Handler :: X)
-#define XXO(X) _(X), wxString{X}.Contains("...")
 
 // ... buf first some more helper definitions, which use FN
 namespace {
 
 void AddEffectMenuItemGroup(
    MenuTable::BaseItemPtrs &table,
-   const wxArrayString & names,
-   const std::vector<bool> &vHasDialog,
+   const TranslatableStrings & names,
    const PluginIDs & plugs,
    const std::vector<CommandFlag> & flags,
    bool isDefault)
@@ -655,12 +653,13 @@ void AddEffectMenuItemGroup(
             wxString item = plug->GetPath();
             if( plug->GetPluginType() == PluginTypeEffect )
                temp2.push_back( Command( item,
-                  item,
-                  item.Contains("..."),
+                  TranslatableString{ item },
                   FN(OnEffect),
                   flags[i],
                   CommandManager::Options{}
-                     .IsEffect().Parameter( plugs[i] ) ) );
+                     .IsEffect()
+                     .AllowInMacros()
+                     .Parameter( plugs[i] ) ) );
 
             i++;
          }
@@ -673,13 +672,19 @@ void AddEffectMenuItemGroup(
          const PluginDescriptor *plug =
             PluginManager::Get().GetPlugin(plugs[i]);
          if( plug->GetPluginType() == PluginTypeEffect )
-            pTable->push_back( Command( names[i],
+            pTable->push_back( Command(
+               // Call Debug() not MSGID() so that any concatenated "..." is
+               // included in the identifier, preserving old behavior, and
+               // avoiding the collision of the "Silence" command and the
+               // "Silence..." generator
+               names[i].Debug(), // names[i].MSGID(),
                names[i],
-               vHasDialog[i],
                FN(OnEffect),
                flags[i],
                CommandManager::Options{}
-                  .IsEffect().Parameter( plugs[i] ) ) );
+                  .IsEffect()
+                  .AllowInMacros()
+                  .Parameter( plugs[i] ) ) );
       }
 
       if (max > 0)
@@ -694,13 +699,13 @@ void AddEffectMenuItemGroup(
             }
             // Done collecting
             table.push_back( Menu(
-               wxString::Format(_("Plug-in %d to %d"), groupNdx + 1, end),
+               XO("Plug-in %d to %d").Format( groupNdx + 1, end ),
                std::move( temp1 )
             ) );
             items = max;
             pTable = &table;
+            groupNdx += max;
          }
-         groupNdx++;
       }
    }
 
@@ -710,14 +715,17 @@ void AddEffectMenuItemGroup(
 MenuTable::BaseItemPtrs PopulateMacrosMenu( CommandFlag flags  )
 {
    MenuTable::BaseItemPtrs result;
-   auto names = MacroCommands::GetNames();
+   auto names = MacroCommands::GetNames(); // these names come from filenames
    int i;
 
    for (i = 0; i < (int)names.size(); i++) {
       auto MacroID = ApplyMacroDialog::MacroIdOfName( names[i] );
       result.push_back( MenuTable::Command( MacroID,
-         names[i], false, FN(OnApplyMacroDirectly),
-         flags ) );
+         TranslatableString{ names[i] }, // file name verbatim
+         FN(OnApplyMacroDirectly),
+         flags,
+         CommandManager::Options{}.AllowInMacros()
+      ) );
    }
 
    return result;
@@ -733,7 +741,7 @@ MenuTable::BaseItemPtr GenerateMenu( AudacityProject & )
    // All of this is a bit hacky until we can get more things connected into
    // the plugin manager...sorry! :-(
 
-   return Menu( _("&Generate"),
+   return Menu( XO("&Generate"),
 #ifdef EXPERIMENTAL_EFFECT_MANAGEMENT
       Command( wxT("ManageGenerators"), XXO("Add / Remove Plug-ins..."),
          FN(OnManageGenerators), AudioIONotBusyFlag ),
@@ -763,15 +771,14 @@ MenuTable::BaseItemPtr EffectMenu( AudacityProject &project )
    // the plugin manager...sorry! :-(
 
    const auto &lastEffect = MenuManager::Get(project).mLastEffect;
-   wxString buildMenuLabel;
-   if (!lastEffect.empty()) {
-      buildMenuLabel.Printf(_("Repeat %s"),
-         EffectManager::Get().GetCommandName(lastEffect));
-   }
+   TranslatableString buildMenuLabel;
+   if (!lastEffect.empty())
+      buildMenuLabel = XO("Repeat %s")
+         .Format( EffectManager::Get().GetCommandName(lastEffect) );
    else
-      buildMenuLabel = _("Repeat Last Effect");
+      buildMenuLabel = XO("Repeat Last Effect");
 
-   return Menu( _("Effe&ct"),
+   return Menu( XO("Effe&ct"),
 #ifdef EXPERIMENTAL_EFFECT_MANAGEMENT
       Command( wxT("ManageEffects"), XXO("Add / Remove Plug-ins..."),
          FN(OnManageEffects), AudioIONotBusyFlag ),
@@ -779,7 +786,7 @@ MenuTable::BaseItemPtr EffectMenu( AudacityProject &project )
       Separator(),
 
 #endif
-      Command( wxT("RepeatLastEffect"), buildMenuLabel, false,
+      Command( wxT("RepeatLastEffect"), buildMenuLabel,
          FN(OnRepeatLastEffect),
          AudioIONotBusyFlag | TimeSelectedFlag |
             WaveTracksSelectedFlag | HasLastEffectFlag,
@@ -800,7 +807,7 @@ MenuTable::BaseItemPtr AnalyzeMenu( AudacityProject & )
    // All of this is a bit hacky until we can get more things connected into
    // the plugin manager...sorry! :-(
 
-   return Menu( _("&Analyze"),
+   return Menu( XO("&Analyze"),
 #ifdef EXPERIMENTAL_EFFECT_MANAGEMENT
       Command( wxT("ManageAnalyzers"), XXO("Add / Remove Plug-ins..."),
          FN(OnManageAnalyzers), AudioIONotBusyFlag ),
@@ -828,7 +835,7 @@ MenuTable::BaseItemPtr ToolsMenu( AudacityProject & )
    using Options = CommandManager::Options;
    auto gAudioIO = AudioIO::Get();
 
-   return Menu( _("T&ools"),
+   return Menu( XO("T&ools"),
 
 #ifdef EXPERIMENTAL_EFFECT_MANAGEMENT
       Command( wxT("ManageTools"), XXO("Add / Remove Plug-ins..."),
@@ -841,7 +848,7 @@ MenuTable::BaseItemPtr ToolsMenu( AudacityProject & )
       Command( wxT("ManageMacros"), XXO("&Macros..."),
          FN(OnManageMacros), AudioIONotBusyFlag ),
 
-      Menu( _("&Apply Macro"),
+      Menu( XO("&Apply Macro"),
          // Palette has no access key to ensure first letter navigation of
          // sub menu
          Command( wxT("ApplyMacrosPalette"), XXO("Palette..."),
@@ -898,8 +905,8 @@ MenuTable::BaseItemPtr ExtraScriptablesIMenu( AudacityProject & )
 
    // These are the more useful to VI user Scriptables.
    // i18n-hint: Scriptables are commands normally used from Python, Perl etc.
-   return Menu( _("Script&ables I"),
-      // Note that the PLUGIN_SYMBOL must have a space between words, 
+   return Menu( XO("Script&ables I"),
+      // Note that the PLUGIN_SYMBOL must have a space between words,
       // whereas the short-form used here must not.
       // (So if you did write "CompareAudio" for the PLUGIN_SYMBOL name, then
       // you would have to use "Compareaudio" here.)
@@ -943,7 +950,7 @@ MenuTable::BaseItemPtr ExtraScriptablesIIMenu( AudacityProject & )
    using namespace MenuTable;
 
    // Less useful to VI users.
-   return Menu( _("Scripta&bles II"),
+   return Menu( XO("Scripta&bles II"),
       Command( wxT("Select"), XXO("Select..."), FN(OnAudacityCommand),
          AudioIONotBusyFlag ),
       Command( wxT("SetTrack"), XXO("Set Track..."), FN(OnAudacityCommand),
@@ -976,5 +983,4 @@ MenuTable::BaseItemPtr ExtraScriptablesIIMenu( AudacityProject & )
    );
 }
 
-#undef XXO
 #undef FN

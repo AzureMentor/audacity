@@ -17,6 +17,7 @@
 
 #include "PrefsPanel.h"
 
+class ChoiceSetting;
 class ShuttleGui;
 class wxArrayStringEx;
 
@@ -35,7 +36,11 @@ class GUIPrefs final : public PrefsPanel
    void PopulateOrExchange(ShuttleGui & S) override;
 
    static void GetRangeChoices(
-      wxArrayStringEx *pChoices, wxArrayStringEx *pCodes);
+      TranslatableStrings *pChoicesUntranslated,
+      wxArrayStringEx *pChoicesTranslated,
+      wxArrayStringEx *pCodes,
+      int *pDefaultRangeIndex = nullptr
+   );
 
    // If no input language given, defaults first to choice in preferences, then
    // to system language.
@@ -53,21 +58,21 @@ class GUIPrefs final : public PrefsPanel
    void Populate();
 
    wxArrayStringEx mLangCodes;
-   wxArrayStringEx mLangNames;
-
-   wxArrayStringEx mHtmlHelpCodes;
-   wxArrayStringEx mHtmlHelpChoices;
-
-   wxArrayStringEx mThemeCodes;
-   wxArrayStringEx mThemeChoices;
+   TranslatableStrings mLangNames;
 
    wxArrayStringEx mRangeCodes;
-   wxArrayStringEx mRangeChoices;
+   TranslatableStrings mRangeChoices;
+   int mDefaultRangeIndex;
 };
 
 /// A PrefsPanel::Factory that creates one GUIPrefs panel.
 extern PrefsPanel::Factory GUIPrefsFactory;
 
 int ShowClippingPrefsID();
+
+extern ChoiceSetting
+     GUIManualLocation
+   , GUITheme
+;
 
 #endif

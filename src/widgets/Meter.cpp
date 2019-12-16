@@ -69,6 +69,7 @@
 #include "../prefs/GUISettings.h"
 #include "../Project.h"
 #include "../ProjectAudioManager.h"
+#include "../ProjectStatus.h"
 #include "../Prefs.h"
 #include "../ShuttleGui.h"
 
@@ -757,14 +758,14 @@ void MeterPanel::OnMouse(wxMouseEvent &evt)
 
   #if wxUSE_TOOLTIPS // Not available in wxX11
    if (evt.Leaving()){
-      GetActiveProject()->SetStatus(wxT(""));
+      ProjectStatus::Get( *GetActiveProject() ).Set(wxT(""));
    }
    else if (evt.Entering()) {
       // Display the tooltip in the status bar
       wxToolTip * pTip = this->GetToolTip();
       if( pTip ) {
          wxString tipText = pTip->GetTip();
-         GetActiveProject()->SetStatus(tipText);
+         ProjectStatus::Get( *GetActiveProject() ).Set(tipText);
       }
    }
   #endif
@@ -2004,14 +2005,13 @@ void MeterPanel::OnPreferences(wxCommandEvent & WXUNUSED(event))
          S.AddFixedText(_("Higher refresh rates make the meter show more frequent\nchanges. A rate of 30 per second or less should prevent\nthe meter affecting audio quality on slower machines."));
          S.StartHorizontalLay();
          {
-            rate = S.AddTextBox(_("Meter refresh rate per second [1-100]: "),
+            rate = S.Name(XO("Meter refresh rate per second [1-100]"))
+               .Validator<IntegerValidator<long>>(
+                  &mMeterRefreshRate, NumValidatorStyle::DEFAULT,
+                  MIN_REFRESH_RATE, MAX_REFRESH_RATE)
+               .AddTextBox(_("Meter refresh rate per second [1-100]: "),
                                 wxString::Format(wxT("%d"), meterRefreshRate),
                                 10);
-            rate->SetName(_("Meter refresh rate per second [1-100]"));
-            IntegerValidator<long> vld(&mMeterRefreshRate);
-
-            vld.SetRange(MIN_REFRESH_RATE, MAX_REFRESH_RATE);
-            rate->SetValidator(vld);
          }
          S.EndHorizontalLay();
       }
@@ -2023,13 +2023,8 @@ void MeterPanel::OnPreferences(wxCommandEvent & WXUNUSED(event))
         {
            S.StartVerticalLay();
            {
-              gradient = S.AddRadioButton(_("Gradient"));
-              gradient->SetName(_("Gradient"));
-              gradient->SetValue(mGradient);
-
-              rms = S.AddRadioButtonToGroup(_("RMS"));
-              rms->SetName(_("RMS"));
-              rms->SetValue(!mGradient);
+              gradient = S.AddRadioButton(_("Gradient"), true, mGradient);
+              rms = S.AddRadioButtonToGroup(_("RMS"), false, mGradient);
            }
            S.EndVerticalLay();
         }
@@ -2039,13 +2034,8 @@ void MeterPanel::OnPreferences(wxCommandEvent & WXUNUSED(event))
         {
            S.StartVerticalLay();
            {
-              db = S.AddRadioButton(_("dB"));
-              db->SetName(_("dB"));
-              db->SetValue(mDB);
-
-              linear = S.AddRadioButtonToGroup(_("Linear"));
-              linear->SetName(_("Linear"));
-              linear->SetValue(!mDB);
+              db = S.AddRadioButton(_("dB"), true, mDB);
+              linear = S.AddRadioButtonToGroup(_("Linear"), false, mDB);
            }
            S.EndVerticalLay();
         }
@@ -2055,17 +2045,12 @@ void MeterPanel::OnPreferences(wxCommandEvent & WXUNUSED(event))
         {
            S.StartVerticalLay();
            {
-              automatic = S.AddRadioButton(_("Automatic"));
-              automatic->SetName(_("Automatic"));
-              automatic->SetValue(mDesiredStyle == AutomaticStereo);
-
-              horizontal = S.AddRadioButtonToGroup(_("Horizontal"));
-              horizontal->SetName(_("Horizontal"));
-              horizontal->SetValue(mDesiredStyle == HorizontalStereo);
-
-              vertical = S.AddRadioButtonToGroup(_("Vertical"));
-              vertical->SetName(_("Vertical"));
-              vertical->SetValue(mDesiredStyle == VerticalStereo);
+              automatic = S.AddRadioButton(
+                  _("Automatic"), AutomaticStereo, mDesiredStyle);
+              horizontal = S.AddRadioButtonToGroup(
+                  _("Horizontal"), HorizontalStereo, mDesiredStyle);
+              vertical = S.AddRadioButtonToGroup(
+                  _("Vertical"), VerticalStereo, mDesiredStyle);
            }
            S.EndVerticalLay();
         }

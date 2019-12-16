@@ -60,7 +60,7 @@ Param( WetOnly,      bool,    wxT("WetOnly"),       false,   false,   true, 1  )
 
 static const struct
 {
-   const wxChar *name;
+   const TranslatableString name;
    EffectReverb::Params params;
 }
 FactoryPresets[] =
@@ -335,7 +335,7 @@ RegistryPaths EffectReverb::GetFactoryPresets()
 
    for (size_t i = 0; i < WXSIZEOF(FactoryPresets); i++)
    {
-      names.push_back(wxGetTranslation(FactoryPresets[i].name));
+      names.push_back( FactoryPresets[i].name.Translation() );
    }
 
    return names;
@@ -439,9 +439,10 @@ void EffectReverb::PopulateOrExchange(ShuttleGui & S)
 #define SpinSlider(n, p) \
       m ## n ## T = S.Id(ID_ ## n). \
          AddSpinCtrl( p, DEF_ ## n, MAX_ ## n, MIN_ ## n); \
-      S.SetStyle(wxSL_HORIZONTAL); \
-      m ## n ## S = S.Id(ID_ ## n). \
-         AddSlider( {}, DEF_ ## n, MAX_ ## n, MIN_ ## n);
+      S; \
+      m ## n ## S = S.Id(ID_ ## n) \
+         .Style(wxSL_HORIZONTAL) \
+         .AddSlider( {}, DEF_ ## n, MAX_ ## n, MIN_ ## n);
 
       SpinSlider(RoomSize,       _("&Room Size (%):"))
       SpinSlider(PreDelay,       _("&Pre-delay (ms):"))
@@ -542,12 +543,9 @@ SpinSliderHandlers(StereoWidth)
 
 void EffectReverb::SetTitle(const wxString & name)
 {
-   wxString title(_("Reverb"));
-
-   if (!name.empty())
-   {
-      title += wxT(": ") + name;
-   }
-
-   mUIDialog->SetTitle(title);
+   mUIDialog->SetTitle(
+      name.empty()
+         ? _("Reverb")
+         : wxString::Format( _("Reverb: %s"), name )
+   );
 }

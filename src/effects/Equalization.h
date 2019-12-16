@@ -24,10 +24,10 @@
 
 #define EQUALIZATION_PLUGIN_SYMBOL \
 ComponentInterfaceSymbol{ XO("Equalization") }
-#define GRAPHICEQ_PLUGIN_SYMBOL \
-ComponentInterfaceSymbol{ wxT("GraphicEQ"), XO("Graphic EQ") }
-#define FILTERCURVE_PLUGIN_SYMBOL \
-ComponentInterfaceSymbol{ wxT("FilterCurve"), XO("Filter Curve") }
+#define GRAPHIC_EQ_PLUGIN_SYMBOL \
+ComponentInterfaceSymbol{ wxT("Graphic EQ"), XO("Graphic EQ") }
+#define FILTER_CURVE_PLUGIN_SYMBOL \
+ComponentInterfaceSymbol{ wxT("Filter Curve"), XO("Filter Curve") }
 
 // Flags to specialise the UI
 const int kEqOptionGraphic =1;
@@ -122,6 +122,9 @@ public:
    bool SetAutomationParameters(CommandParameters & parms) override;
    bool LoadFactoryDefaults() override;
 
+   RegistryPaths GetFactoryPresets() override;
+   bool LoadFactoryPreset(int id) override;
+
    // EffectUIClientInterface implementation
 
    bool ValidateUI() override;
@@ -178,7 +181,7 @@ private:
    void UpdateCurves();
    void UpdateDraw();
 
-   void LayoutEQSliders();
+   //void LayoutEQSliders();
    void UpdateGraphic(void);
    void EnvLogToLin(void);
    void EnvLinToLog(void);
@@ -187,6 +190,7 @@ private:
    void spline(double x[], double y[], size_t n, double y2[]);
    double splint(double x[], double y[], size_t n, double y2[], double xr);
 
+   void OnErase( wxEvent &event );
    void OnSize( wxSizeEvent & event );
    void OnSlider( wxCommandEvent & event );
    void OnInterp( wxCommandEvent & event );
@@ -259,7 +263,7 @@ private:
    wxSizerItem *mLeftSpacer;
 
    EqualizationPanel *mPanel;
-   wxPanel *mGraphicPanel;
+   //wxPanel *mGraphicPanel;
    wxRadioButton *mDraw;
    wxRadioButton *mGraphic;
    wxCheckBox *mLinFreq;

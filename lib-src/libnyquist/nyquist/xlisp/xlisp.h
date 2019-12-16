@@ -45,9 +45,10 @@ extern "C" {
 #define NNODES		2000
 #define AFMT		"%lx"
 #define OFFTYPE		long
-#define SAVERESTORE
+/* #define SAVERESTORE */
 #define XL_LITTLE_ENDIAN 
 #define _longjmp longjmp
+#define _setjmp setjmp
 #endif
 
 /* for the Turbo C compiler - MS-DOS, large model */
@@ -55,7 +56,7 @@ extern "C" {
 #define NNODES		2000
 #define AFMT		"%lx"
 #define OFFTYPE		long
-#define SAVERESTORE
+/* #define SAVERESTORE */
 #define XL_LITTLE_ENDIAN
 #endif
 
@@ -67,7 +68,7 @@ extern "C" {
 #define CVPTR(x)	ptrtoabs(x)
 #define NIL		(void *)0
 extern long ptrtoabs();
-#define SAVERESTORE
+/* #define SAVERESTORE */
 #define XL_LITTLE_ENDIAN
 #endif
 
@@ -166,7 +167,7 @@ extern long ptrtoabs();
 #define AFMT "%lx"
 #define OFFTYPE long
 #define NIL (void *)0
-#define SAVERESTORE
+/* #define SAVERESTORE */
 #include <sys/types.h>
 /* #if __BYTE_ORDER == __LITTLE_ENDIAN */
 #if defined(__LITTLE_ENDIAN__)
@@ -198,7 +199,7 @@ extern long ptrtoabs();
 #define LOCAL		static
 #endif
 #ifndef AFMT
-#define AFMT		"%x"
+#define AFMT		"%lx"
 #endif
 #ifndef FIXTYPE
 #define FIXTYPE		long
@@ -705,6 +706,7 @@ void trcputstr(const char *str);
 
 
 /* xlisp.c */
+long xlsrand(long seed);
 long xlrand(long range);
 double xlrealrand(void);
 void xlrdsave(LVAL expr);
@@ -823,6 +825,7 @@ LVAL xsqrt(void);
 LVAL xfix(void);
 LVAL xfloat(void);
 LVAL xrand(void);
+LVAL xsrand(void);
 LVAL xminusp(void);
 LVAL xzerop(void);
 LVAL xplusp(void);
@@ -1038,9 +1041,11 @@ void set_xlisp_path(const char *p);
 void localinit(void);
 void localsymbols(void);
 void print_local_gc_info(void);
+void local_toplevel(void);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif
+

@@ -71,7 +71,7 @@
    }
 #endif
 
-#define DESC _("WAV, AIFF, and other uncompressed types")
+#define DESC XO("WAV, AIFF, and other uncompressed types")
 
 class PCMImportPlugin final : public ImportPlugin
 {
@@ -84,7 +84,7 @@ public:
    ~PCMImportPlugin() { }
 
    wxString GetPluginStringID() override { return wxT("libsndfile"); }
-   wxString GetPluginFormatDescription() override;
+   TranslatableString GetPluginFormatDescription() override;
    std::unique_ptr<ImportFileHandle> Open(const FilePath &Filename) override;
 
    unsigned SequenceNumber() const override;
@@ -97,7 +97,7 @@ public:
    PCMImportFileHandle(const FilePath &name, SFFile &&file, SF_INFO info);
    ~PCMImportFileHandle();
 
-   wxString GetFileDescription() override;
+   TranslatableString GetFileDescription() override;
    ByteCount GetFileUncompressedBytes() override;
    ProgressResult Import(TrackFactory *trackFactory, TrackHolders &outTracks,
               Tags *tags) override;
@@ -119,7 +119,7 @@ private:
    sampleFormat          mFormat;
 };
 
-wxString PCMImportPlugin::GetPluginFormatDescription()
+TranslatableString PCMImportPlugin::GetPluginFormatDescription()
 {
     return DESC;
 }
@@ -220,9 +220,69 @@ PCMImportFileHandle::PCMImportFileHandle(const FilePath &name,
       mFormat = floatSample;
 }
 
-wxString PCMImportFileHandle::GetFileDescription()
+TranslatableString PCMImportFileHandle::GetFileDescription()
 {
-   return SFCall<wxString>(sf_header_name, mInfo.format);
+   // Library strings
+   // See the major_formats and subtype_formats tables in command.c in
+   // libsndfile for this list of possibilities
+
+using Unevaluated = decltype(
+   /* major_formats */
+     XO("AIFF (Apple/SGI)")
+   , XO("AU (Sun/NeXT)")
+   , XO("AVR (Audio Visual Research)")
+   , XO("CAF (Apple Core Audio File)")
+   , XO("FLAC (FLAC Lossless Audio Codec)")
+   , XO("HTK (HMM Tool Kit)")
+   , XO("IFF (Amiga IFF/SVX8/SV16)")
+   , XO("MAT4 (GNU Octave 2.0 / Matlab 4.2)")
+   , XO("MAT5 (GNU Octave 2.1 / Matlab 5.0)")
+   , XO("MPC (Akai MPC 2k)")
+   , XO("OGG (OGG Container format)")
+   , XO("PAF (Ensoniq PARIS)")
+   , XO("PVF (Portable Voice Format)")
+   , XO("RAW (header-less)")
+   , XO("RF64 (RIFF 64)")
+   , XO("SD2 (Sound Designer II)")
+   , XO("SDS (Midi Sample Dump Standard)")
+   , XO("SF (Berkeley/IRCAM/CARL)")
+   , XO("VOC (Creative Labs)")
+   , XO("W64 (SoundFoundry WAVE 64)")
+   , XO("WAV (Microsoft)")
+   , XO("WAV (NIST Sphere)")
+   , XO("WAVEX (Microsoft)")
+   , XO("WVE (Psion Series 3)")
+   , XO("XI (FastTracker 2)")
+);
+
+using Unevaluated2 = decltype(
+   /* subtype_formats */
+     XO("Signed 8 bit PCM")
+   , XO("Signed 16 bit PCM")
+   , XO("Signed 24 bit PCM")
+   , XO("Signed 32 bit PCM")
+   , XO("Unsigned 8 bit PCM")
+   , XO("32 bit float")
+   , XO("64 bit float")
+   , XO("U-Law")
+   , XO("A-Law")
+   , XO("IMA ADPCM")
+   , XO("Microsoft ADPCM")
+   , XO("GSM 6.10")
+   , XO("32kbs G721 ADPCM")
+   , XO("24kbs G723 ADPCM")
+   , XO("12 bit DWVW")
+   , XO("16 bit DWVW")
+   , XO("24 bit DWVW")
+   , XO("VOX ADPCM")
+   , XO("16 bit DPCM")
+   , XO("8 bit DPCM")
+   , XO("Vorbis")
+);
+
+   auto untranslated = SFCall<wxString>(sf_header_name, mInfo.format);
+   return TranslatableString{
+      untranslated, {} };
 }
 
 auto PCMImportFileHandle::GetFileUncompressedBytes() -> ByteCount
@@ -230,11 +290,14 @@ auto PCMImportFileHandle::GetFileUncompressedBytes() -> ByteCount
    return mInfo.frames * mInfo.channels * SAMPLE_SIZE(mFormat);
 }
 
+#ifdef EXPERIMENTAL_OD_DATA
 // returns "copy" or "edit" (aliased) as the user selects.
 // if the cancel button is hit then "cancel" is returned.
 static wxString AskCopyOrEdit()
 {
-   wxString oldCopyPref = gPrefs->Read(wxT("/FileFormats/CopyOrEditUncompressedData"), wxT("copy"));
+
+   auto oldCopyPref = FileFormatsCopyOrEditSetting.Read();
+
    bool firstTimeAsk    = gPrefs->Read(wxT("/Warnings/CopyOrEditUncompressedDataFirstAsk"), true)?true:false;
    bool oldAskPref      = gPrefs->Read(wxT("/Warnings/CopyOrEditUncompressedDataAsk"), true)?true:false;
 
@@ -242,7 +305,7 @@ static wxString AskCopyOrEdit()
    // This effectively does a one-time change to the preferences.
    if (firstTimeAsk) {
       if (oldCopyPref != wxT("copy")) {
-         gPrefs->Write(wxT("/FileFormats/CopyOrEditUncompressedData"), wxT("copy"));
+         FileFormatsCopyOrEditSetting.Write( wxT("copy") );
          oldCopyPref = wxT("copy");
       }
       gPrefs->Write(wxT("/Warnings/CopyOrEditUncompressedDataFirstAsk"), (long) false);
@@ -335,13 +398,14 @@ static wxString AskCopyOrEdit()
 
       // if the preference changed, save it.
       if (newCopyPref != oldCopyPref) {
-         gPrefs->Write(wxT("/FileFormats/CopyOrEditUncompressedData"), newCopyPref);
+         FileFormatsCopyOrEditSetting.Write( newCopyPref );
          gPrefs->Flush();
       }
       oldCopyPref = newCopyPref;
    }
    return oldCopyPref;
 }
+#endif
 
 #ifdef USE_LIBID3TAG
 struct id3_tag_deleter {
@@ -358,6 +422,7 @@ ProgressResult PCMImportFileHandle::Import(TrackFactory *trackFactory,
 
    wxASSERT(mFile.get());
 
+#ifdef EXPERIMENTAL_OD_DATA
    // Get the preference / warn the user about aliased files.
    wxString copyEdit = AskCopyOrEdit();
 
@@ -368,6 +433,7 @@ ProgressResult PCMImportFileHandle::Import(TrackFactory *trackFactory,
    bool doEdit = false;
    if (copyEdit.IsSameAs(wxT("edit"), false))
       doEdit = true;
+#endif
 
 
    CreateProgress();
@@ -386,6 +452,7 @@ ProgressResult PCMImportFileHandle::Import(TrackFactory *trackFactory,
    auto maxBlockSize = channels.begin()->get()->GetMaxBlockSize();
    auto updateResult = ProgressResult::Cancelled;
 
+#ifdef EXPERIMENTAL_OD_DATA
    // If the format is not seekable, we must use 'copy' mode,
    // because 'edit' mode depends on the ability to seek to an
    // arbitrary location in the file.
@@ -458,7 +525,10 @@ ProgressResult PCMImportFileHandle::Import(TrackFactory *trackFactory,
             ODManager::Instance()->AddNewTask(std::move(computeTask));
       }
    }
-   else {
+   else 
+#endif
+
+   {
       // Otherwise, we're in the "copy" mode, where we read in the actual
       // samples from the file and store our own local copy of the
       // samples in the tracks.

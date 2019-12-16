@@ -43,6 +43,7 @@ class AudacityCommand;
 
 class AudacityProject;
 class LabelTrack;
+class NotifyingSelectedRegion;
 class ProgressDialog;
 class SelectedRegion;
 class EffectUIHost;
@@ -257,7 +258,7 @@ class AUDACITY_DLL_API Effect /* not final */ : public wxEvtHandler,
    // have the "selected" flag set to true, which is consistent with
    // Audacity's standard UI.
    /* not virtual */ bool DoEffect(wxWindow *parent, double projectRate, TrackList *list,
-                 TrackFactory *factory, SelectedRegion *selectedRegion,
+                 TrackFactory *factory, NotifyingSelectedRegion &selectedRegion,
                  bool shouldPrompt = true);
 
    bool Delegate( Effect &delegate, wxWindow *parent, bool shouldPrompt);
@@ -334,15 +335,15 @@ protected:
    // is okay, but don't try to undo).
 
    // Pass a fraction between 0.0 and 1.0
-   bool TotalProgress(double frac, const wxString & = {});
+   bool TotalProgress(double frac, const TranslatableString & = {});
 
    // Pass a fraction between 0.0 and 1.0, for the current track
    // (when doing one track at a time)
-   bool TrackProgress(int whichTrack, double frac, const wxString & = {});
+   bool TrackProgress(int whichTrack, double frac, const TranslatableString & = {});
 
    // Pass a fraction between 0.0 and 1.0, for the current track group
    // (when doing stereo groups at a time)
-   bool TrackGroupProgress(int whichGroup, double frac, const wxString & = {});
+   bool TrackGroupProgress(int whichGroup, double frac, const TranslatableString & = {});
 
    int GetNumWaveTracks() { return mNumTracks; }
    int GetNumWaveGroups() { return mNumGroups; }
@@ -459,7 +460,7 @@ protected:
    double         mProjectRate; // Sample rate of the project - NEW tracks should
                                // be created with this rate...
    double         mSampleRate;
-   SelectedRegion *mpSelectedRegion{};
+   wxWeakRef<NotifyingSelectedRegion> mpSelectedRegion{};
    TrackFactory   *mFactory;
    const TrackList *inputTracks() const { return mTracks; }
    std::shared_ptr<TrackList> mOutputTracks; // used only if CopyInputTracks() is called.

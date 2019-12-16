@@ -13,7 +13,7 @@
 
 ********************************************************************//**
 
-\class SoundActivatedRecord
+\class SoundActivatedRecordDialog
 \brief Configures sound activated recording.
 
 *//********************************************************************/
@@ -25,11 +25,11 @@
 #include "Prefs.h"
 #include "prefs/GUISettings.h"
 
-BEGIN_EVENT_TABLE(SoundActivatedRecord, wxDialogWrapper)
-   EVT_BUTTON(wxID_OK, SoundActivatedRecord::OnOK)
+BEGIN_EVENT_TABLE(SoundActivatedRecordDialog, wxDialogWrapper)
+   EVT_BUTTON(wxID_OK, SoundActivatedRecordDialog::OnOK)
 END_EVENT_TABLE()
 
-SoundActivatedRecord::SoundActivatedRecord(wxWindow* parent)
+SoundActivatedRecordDialog::SoundActivatedRecordDialog(wxWindow* parent)
 : wxDialogWrapper(parent, -1, _("Sound Activated Record"), wxDefaultPosition,
            wxDefaultSize, wxCAPTION )
 //           wxDefaultSize, wxCAPTION | wxTHICK_FRAME)
@@ -41,28 +41,30 @@ SoundActivatedRecord::SoundActivatedRecord(wxWindow* parent)
    Center();
 }
 
-SoundActivatedRecord::~SoundActivatedRecord()
+SoundActivatedRecordDialog::~SoundActivatedRecordDialog()
 {
 }
 
-void SoundActivatedRecord::PopulateOrExchange(ShuttleGui & S)
+void SoundActivatedRecordDialog::PopulateOrExchange(ShuttleGui & S)
 {
    S.SetBorder(5);
-   int dBRange;
 
    S.StartVerticalLay();
    {
       S.StartMultiColumn(2, wxEXPAND);
-         S.SetStretchyCol(1);
-         dBRange = gPrefs->Read(ENV_DB_KEY, ENV_DB_RANGE);
-         S.TieSlider(_("Activation level (dB):"), wxT("/AudioIO/SilenceLevel"), -50, 0, -dBRange);
+      S.SetStretchyCol(1);
+      S.TieSlider(
+         _("Activation level (dB):"),
+         {wxT("/AudioIO/SilenceLevel"), -50},
+         0, -gPrefs->Read(ENV_DB_KEY, ENV_DB_RANGE)
+      );
       S.EndMultiColumn();
    }
    S.EndVerticalLay();
    S.AddStandardButtons();
 }
 
-void SoundActivatedRecord::OnOK(wxCommandEvent & WXUNUSED(event))
+void SoundActivatedRecordDialog::OnOK(wxCommandEvent & WXUNUSED(event))
 {
    ShuttleGui S( this, eIsSavingToPrefs );
    PopulateOrExchange( S );

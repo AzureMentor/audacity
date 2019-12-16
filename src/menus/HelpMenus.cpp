@@ -25,7 +25,6 @@
 #include "../prefs/PrefsDialog.h"
 #include "../widgets/AudacityMessageBox.h"
 #include "../widgets/HelpSystem.h"
-#include "../widgets/LinkingHtmlWindow.h"
 
 #if defined(EXPERIMENTAL_CRASH_REPORT)
 #include <wx/debugrpt.h>
@@ -46,8 +45,9 @@ void ShowDiagnostics(
    wxTextCtrl *text;
    S.StartVerticalLay();
    {
-      S.SetStyle(wxTE_MULTILINE | wxTE_READONLY);
-      text = S.Id(wxID_STATIC).AddTextWindow(info);
+      text = S.Id(wxID_STATIC)
+         .Style(wxTE_MULTILINE | wxTE_READONLY)
+         .AddTextWindow(info);
       S.AddStandardButtons(eOkButton | eCancelButton);
    }
    S.EndVerticalLay();
@@ -411,7 +411,6 @@ static CommandHandlerObject &findCommandHandler(AudacityProject &) {
 
 #define FN(X) findCommandHandler, \
    static_cast<CommandFunctorPointer>(& HelpActions::Handler :: X)
-#define XXO(X) _(X), wxString{X}.Contains("...")
 
 MenuTable::BaseItemPtr HelpMenu( AudacityProject & )
 {
@@ -421,7 +420,7 @@ MenuTable::BaseItemPtr HelpMenu( AudacityProject & )
 
    using namespace MenuTable;
 
-   return Menu( _("&Help"),
+   return Menu( XO("&Help"),
       // QuickFix menu item not in Audacity 2.3.1 whilst we discuss further.
 #ifdef EXPERIMENTAL_DA
       // DA: Has QuickFix menu item.
@@ -440,7 +439,7 @@ MenuTable::BaseItemPtr HelpMenu( AudacityProject & )
 
       Separator(),
 
-      Menu( _("&Diagnostics"),
+      Menu( XO("&Diagnostics"),
          Command( wxT("DeviceInfo"), XXO("Au&dio Device Info..."),
             FN(OnAudioDeviceInfo),
             AudioIONotBusyFlag ),
@@ -475,5 +474,4 @@ MenuTable::BaseItemPtr HelpMenu( AudacityProject & )
    );
 }
 
-#undef XXO
 #undef FN

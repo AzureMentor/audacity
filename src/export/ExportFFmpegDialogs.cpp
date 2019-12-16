@@ -61,6 +61,7 @@
 #include "../Tags.h"
 #include "../TranslatableStringArray.h"
 #include "../widgets/AudacityMessageBox.h"
+#include "../widgets/HelpSystem.h"
 
 #include "Export.h"
 
@@ -137,20 +138,61 @@ static const wxChar *FFmpegExportCtrlIDNames[] = {
 // ExportFFmpegAC3Options Class
 //----------------------------------------------------------------------------
 
-// This initialises content for the static const member variables defined in
-// ExportFFmpegDialogs.h (note no static keyword - important!)
-const int ExportFFmpegAC3Options::iAC3BitRates[] = { 32000, 40000, 48000, 56000, 64000, 80000, 96000, 112000, 128000, 160000, 192000, 224000, 256000, 320000, 384000, 448000, 512000, 576000, 640000 };
+namespace
+{
+
+const TranslatableStrings AC3BitRateNames{
+   // i18n-hint kbps abbreviates "thousands of bits per second"
+   XO("32 kbps"),
+   XO("40 kbps"),
+   XO("48 kbps"),
+   XO("56 kbps"),
+   XO("64 kbps"),
+   XO("80 kbps"),
+   XO("96 kbps"),
+   XO("112 kbps"),
+   XO("128 kbps"),
+   XO("160 kbps"),
+   XO("192 kbps"),
+   XO("224 kbps"),
+   XO("256 kbps"),
+   XO("320 kbps"),
+   XO("384 kbps"),
+   XO("448 kbps"),
+   XO("512 kbps"),
+   XO("576 kbps"),
+   XO("640 kbps"),
+};
+
+const std::vector< int > AC3BitRateValues{
+   32000,
+   40000,
+   48000,
+   56000,
+   64000,
+   80000,
+   96000,
+   112000,
+   128000,
+   160000,
+   192000,
+   224000,
+   256000,
+   320000,
+   384000,
+   448000,
+   512000,
+   576000,
+   640000,
+};
+
+}
+
 const int ExportFFmpegAC3Options::iAC3SampleRates[] = { 32000, 44100, 48000, 0 };
 
 ExportFFmpegAC3Options::ExportFFmpegAC3Options(wxWindow *parent, int WXUNUSED(format))
 :  wxPanelWrapper(parent, wxID_ANY)
 {
-   for (unsigned int i=0; i < (sizeof(iAC3BitRates)/sizeof(int)); i++)
-   {
-      mBitRateNames.push_back(wxString::Format(_("%i kbps"),iAC3BitRates[i]/1000));
-      mBitRateLabels.push_back(iAC3BitRates[i]);
-   }
-
    ShuttleGui S(this, eIsCreatingFromPrefs);
    PopulateOrExchange(S);
 
@@ -172,8 +214,13 @@ void ExportFFmpegAC3Options::PopulateOrExchange(ShuttleGui & S)
       {
          S.StartMultiColumn(2, wxCENTER);
          {
-            S.TieChoice(_("Bit Rate:"), wxT("/FileFormats/AC3BitRate"),
-               160000, mBitRateNames, mBitRateLabels);
+            S.TieNumberAsChoice(
+               _("Bit Rate:"),
+               {wxT("/FileFormats/AC3BitRate"),
+                160000},
+               AC3BitRateNames,
+               &AC3BitRateValues
+            );
          }
          S.EndMultiColumn();
       }
@@ -231,7 +278,7 @@ void ExportFFmpegAACOptions::PopulateOrExchange(ShuttleGui & S)
          S.StartMultiColumn(2, wxCENTER);
          {
             S.SetStretchyCol(1);
-            S.Prop(1).TieSlider(_("Quality:"),wxT("/FileFormats/AACQuality"),100,500,10);
+            S.Prop(1).TieSlider(_("Quality (kbps):"), {wxT("/FileFormats/AACQuality"), 160},320, 98);
          }
          S.EndMultiColumn();
       }
@@ -263,20 +310,40 @@ bool ExportFFmpegAACOptions::TransferDataFromWindow()
 // ExportFFmpegAMRNBOptions Class
 //----------------------------------------------------------------------------
 
+namespace {
+
 /// Bit Rates supported by libAMR-NB encoder
 /// Sample Rate is always 8 kHz
-int ExportFFmpegAMRNBOptions::iAMRNBBitRate[] =
-{ 4750, 5150, 5900, 6700, 7400, 7950, 10200, 12200 };
+const TranslatableStrings AMRNBBitRateNames
+{
+   // i18n-hint kbps abbreviates "thousands of bits per second"
+   XO("4.75 kbps"),
+   XO("5.15 kbps"),
+   XO("5.90 kbps"),
+   XO("6.70 kbps"),
+   XO("7.40 kbps"),
+   XO("7.95 kbps"),
+   XO("10.20 kbps"),
+   XO("12.20 kbps"),
+};
+
+const std::vector< int > AMRNBBitRateValues
+{
+   4750,
+   5150,
+   5900,
+   6700,
+   7400,
+   7950,
+   10200,
+   12200,
+};
+
+}
 
 ExportFFmpegAMRNBOptions::ExportFFmpegAMRNBOptions(wxWindow *parent, int WXUNUSED(format))
 :  wxPanelWrapper(parent, wxID_ANY)
 {
-   for (unsigned int i=0; i < (sizeof(iAMRNBBitRate)/sizeof(int)); i++)
-   {
-      mBitRateNames.push_back(wxString::Format(_("%.2f kbps"),(float)iAMRNBBitRate[i]/1000));
-      mBitRateLabels.push_back(iAMRNBBitRate[i]);
-   }
-
    ShuttleGui S(this, eIsCreatingFromPrefs);
    PopulateOrExchange(S);
 
@@ -298,8 +365,13 @@ void ExportFFmpegAMRNBOptions::PopulateOrExchange(ShuttleGui & S)
       {
          S.StartMultiColumn(2, wxCENTER);
          {
-            S.TieChoice(_("Bit Rate:"), wxT("/FileFormats/AMRNBBitRate"),
-               12200, mBitRateNames, mBitRateLabels);
+            S.TieNumberAsChoice(
+               _("Bit Rate:"),
+               {wxT("/FileFormats/AMRNBBitRate"),
+                12200},
+               AMRNBBitRateNames,
+               &AMRNBBitRateValues
+            );
          }
          S.EndMultiColumn();
       }
@@ -334,20 +406,46 @@ bool ExportFFmpegAMRNBOptions::TransferDataFromWindow()
 const int ExportFFmpegWMAOptions::iWMASampleRates[] =
 { 8000, 11025, 16000, 22050, 44100, 0};
 
+namespace {
+
 /// Bit Rates supported by WMA encoder. Setting bit rate to other values will not result in different file size.
-const int ExportFFmpegWMAOptions::iWMABitRate[] =
-{ 24000, 32000, 40000, 48000, 64000, 80000, 96000, 128000, 160000, 192000, 256000, 320000 };
+const TranslatableStrings WMABitRateNames
+{
+   // i18n-hint kbps abbreviates "thousands of bits per second"
+   XO("24 kbps"),
+   XO("32 kbps"),
+   XO("40 kbps"),
+   XO("48 kbps"),
+   XO("64 kbps"),
+   XO("80 kbps"),
+   XO("96 kbps"),
+   XO("128 kbps"),
+   XO("160 kbps"),
+   XO("192 kbps"),
+   XO("256 kbps"),
+   XO("320 kbps"),
+};
+
+const std::vector< int > WMABitRateValues{
+   24000,
+   32000,
+   40000,
+   48000,
+   64000,
+   80000,
+   96000,
+   128000,
+   160000,
+   192000,
+   256000,
+   320000,
+};
+
+}
 
 ExportFFmpegWMAOptions::ExportFFmpegWMAOptions(wxWindow *parent, int WXUNUSED(format))
 :  wxPanelWrapper(parent, wxID_ANY)
 {
-   for (unsigned int i=0; i < (sizeof(iWMABitRate)/sizeof(int)); i++)
-   {
-      /* i18n-hint: abbreviates thousands of bits per second */
-      mBitRateNames.push_back(wxString::Format(_("%i kbps"),iWMABitRate[i]/1000));
-      mBitRateLabels.push_back(iWMABitRate[i]);
-   }
-
    ShuttleGui S(this, eIsCreatingFromPrefs);
    PopulateOrExchange(S);
 
@@ -369,8 +467,13 @@ void ExportFFmpegWMAOptions::PopulateOrExchange(ShuttleGui & S)
       {
          S.StartMultiColumn(2, wxCENTER);
          {
-            S.TieChoice(_("Bit Rate:"), wxT("/FileFormats/WMABitRate"),
-               128000, mBitRateNames, mBitRateLabels);
+            S.TieNumberAsChoice(
+               _("Bit Rate:"),
+               {wxT("/FileFormats/WMABitRate"),
+                128000},
+               WMABitRateNames,
+               &WMABitRateValues
+            );
          }
          S.EndMultiColumn();
       }
@@ -467,7 +570,15 @@ void ExportFFmpegCustomOptions::OnOpen(wxCommandEvent & WXUNUSED(evt))
       }
    }
    DropFFmpegLibs();
+
+#ifdef __WXMAC__
+   // Bug 2077 Must be a parent window on OSX or we will appear behind.
+   auto pWin = wxGetTopLevelParent( this );
+#else
+   // Use GetTopWindow on windows as there is no hWnd with top level parent.
    auto pWin = wxTheApp->GetTopWindow();
+#endif
+
    ExportFFmpegOptions od(pWin);
    od.ShowModal();
 }
@@ -560,17 +671,25 @@ FFmpegPreset *FFmpegPresets::FindPreset(wxString &name)
    return NULL;
 }
 
-void FFmpegPresets::SavePreset(ExportFFmpegOptions *parent, wxString &name)
+// return false if overwrite was not allowed.
+bool FFmpegPresets::OverwriteIsOk( wxString &name )
 {
-   wxString format;
-   wxString codec;
    FFmpegPreset *preset = FindPreset(name);
    if (preset)
    {
       wxString query = wxString::Format(_("Overwrite preset '%s'?"),name);
       int action = AudacityMessageBox(query,_("Confirm Overwrite"),wxYES_NO | wxCENTRE);
-      if (action == wxNO) return;
+      if (action == wxNO) return false;
    }
+   return true;
+}
+
+
+bool FFmpegPresets::SavePreset(ExportFFmpegOptions *parent, wxString &name)
+{
+   wxString format;
+   wxString codec;
+   FFmpegPreset *preset;
 
    {
       wxWindow *wnd;
@@ -581,7 +700,7 @@ void FFmpegPresets::SavePreset(ExportFFmpegOptions *parent, wxString &name)
       if (lb->GetSelection() < 0)
       {
          AudacityMessageBox(_("Please select format before saving a profile"));
-         return;
+         return false;
       }
       format = lb->GetStringSelection();
 
@@ -590,7 +709,7 @@ void FFmpegPresets::SavePreset(ExportFFmpegOptions *parent, wxString &name)
       if (lb->GetSelection() < 0)
       {
          AudacityMessageBox(_("Please select codec before saving a profile"));
-         return;
+         return false;
       }
       codec = lb->GetStringSelection();
    }
@@ -656,6 +775,7 @@ void FFmpegPresets::SavePreset(ExportFFmpegOptions *parent, wxString &name)
          }
       }
    }
+   return true;
 }
 
 void FFmpegPresets::LoadPreset(ExportFFmpegOptions *parent, wxString &name)
@@ -884,6 +1004,7 @@ void FFmpegPresets::WriteXML(XMLWriter &xmlFile) const
 
 BEGIN_EVENT_TABLE(ExportFFmpegOptions, wxDialogWrapper)
    EVT_BUTTON(wxID_OK,ExportFFmpegOptions::OnOK)
+   EVT_BUTTON(wxID_HELP,ExportFFmpegOptions::OnGetURL)
    EVT_LISTBOX(FEFormatID,ExportFFmpegOptions::OnFormatList)
    EVT_LISTBOX(FECodecID,ExportFFmpegOptions::OnCodecList)
    EVT_BUTTON(FEAllFormatsID,ExportFFmpegOptions::OnAllFormats)
@@ -931,7 +1052,7 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
    { wxT("asf"), AV_CODEC_ID_TRUESPEECH },
    { wxT("asf"), AV_CODEC_ID_GSM_MS },
    { wxT("asf"), AV_CODEC_ID_ADPCM_G726 },
-   { wxT("asf"), AV_CODEC_ID_MP2 },
+   //{ wxT("asf"), AV_CODEC_ID_MP2 }, Bug 59
    { wxT("asf"), AV_CODEC_ID_MP3 },
 #if LIBAVCODEC_VERSION_MAJOR < 58
    { wxT("asf"), AV_CODEC_ID_VOXWARE },
@@ -967,7 +1088,7 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
    { wxT("avi"), AV_CODEC_ID_TRUESPEECH },
    { wxT("avi"), AV_CODEC_ID_GSM_MS },
    { wxT("avi"), AV_CODEC_ID_ADPCM_G726 },
-   { wxT("avi"), AV_CODEC_ID_MP2 },
+   // { wxT("avi"), AV_CODEC_ID_MP2 }, //Bug 59
    { wxT("avi"), AV_CODEC_ID_MP3 },
 #if LIBAVCODEC_VERSION_MAJOR < 58
    { wxT("avi"), AV_CODEC_ID_VOXWARE },
@@ -1016,7 +1137,7 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
    { wxT("matroska"), AV_CODEC_ID_TRUESPEECH },
    { wxT("matroska"), AV_CODEC_ID_GSM_MS },
    { wxT("matroska"), AV_CODEC_ID_ADPCM_G726 },
-   { wxT("matroska"), AV_CODEC_ID_MP2 },
+   // { wxT("matroska"), AV_CODEC_ID_MP2 }, // Bug 59
    { wxT("matroska"), AV_CODEC_ID_MP3 },
 #if LIBAVCODEC_VERSION_MAJOR < 58
    { wxT("matroska"), AV_CODEC_ID_VOXWARE },
@@ -1089,27 +1210,27 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
    { wxT("mpeg"), AV_CODEC_ID_AC3 },
    { wxT("mpeg"), AV_CODEC_ID_DTS },
    { wxT("mpeg"), AV_CODEC_ID_PCM_S16BE },
-   { wxT("mpeg"), AV_CODEC_ID_MP2 },
+   //{ wxT("mpeg"), AV_CODEC_ID_MP2 },// Bug 59
 
    { wxT("vcd"), AV_CODEC_ID_AC3 },
    { wxT("vcd"), AV_CODEC_ID_DTS },
    { wxT("vcd"), AV_CODEC_ID_PCM_S16BE },
-   { wxT("vcd"), AV_CODEC_ID_MP2 },
+   //{ wxT("vcd"), AV_CODEC_ID_MP2 },// Bug 59
 
    { wxT("vob"), AV_CODEC_ID_AC3 },
    { wxT("vob"), AV_CODEC_ID_DTS },
    { wxT("vob"), AV_CODEC_ID_PCM_S16BE },
-   { wxT("vob"), AV_CODEC_ID_MP2 },
+   //{ wxT("vob"), AV_CODEC_ID_MP2 },// Bug 59
 
    { wxT("svcd"), AV_CODEC_ID_AC3 },
    { wxT("svcd"), AV_CODEC_ID_DTS },
    { wxT("svcd"), AV_CODEC_ID_PCM_S16BE },
-   { wxT("svcd"), AV_CODEC_ID_MP2 },
+   //{ wxT("svcd"), AV_CODEC_ID_MP2 },// Bug 59
 
    { wxT("dvd"), AV_CODEC_ID_AC3 },
    { wxT("dvd"), AV_CODEC_ID_DTS },
    { wxT("dvd"), AV_CODEC_ID_PCM_S16BE },
-   { wxT("dvd"), AV_CODEC_ID_MP2 },
+   //{ wxT("dvd"), AV_CODEC_ID_MP2 },// Bug 59
 
    { wxT("nut"), AV_CODEC_ID_PCM_S16LE },
    { wxT("nut"), AV_CODEC_ID_PCM_U8 },
@@ -1124,7 +1245,7 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
    { wxT("nut"), AV_CODEC_ID_TRUESPEECH },
    { wxT("nut"), AV_CODEC_ID_GSM_MS },
    { wxT("nut"), AV_CODEC_ID_ADPCM_G726 },
-   { wxT("nut"), AV_CODEC_ID_MP2 },
+   //{ wxT("nut"), AV_CODEC_ID_MP2 },// Bug 59
    { wxT("nut"), AV_CODEC_ID_MP3 },
  #if LIBAVCODEC_VERSION_MAJOR < 58
    { wxT("nut"), AV_CODEC_ID_VOXWARE },
@@ -1174,20 +1295,20 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
    { wxT("wav"), AV_CODEC_ID_TRUESPEECH },
    { wxT("wav"), AV_CODEC_ID_GSM_MS },
    { wxT("wav"), AV_CODEC_ID_ADPCM_G726 },
-   { wxT("wav"), AV_CODEC_ID_MP2 },
+   //{ wxT("wav"), AV_CODEC_ID_MP2 }, Bug 59 - It crashes.
    { wxT("wav"), AV_CODEC_ID_MP3 },
 #if LIBAVCODEC_VERSION_MAJOR < 58
    { wxT("wav"), AV_CODEC_ID_VOXWARE },
 #endif
    { wxT("wav"), AV_CODEC_ID_AAC },
-   { wxT("wav"), AV_CODEC_ID_WMAV1 },
-   { wxT("wav"), AV_CODEC_ID_WMAV2 },
+   // { wxT("wav"), AV_CODEC_ID_WMAV1 },
+   // { wxT("wav"), AV_CODEC_ID_WMAV2 },
    { wxT("wav"), AV_CODEC_ID_WMAPRO },
    { wxT("wav"), AV_CODEC_ID_ADPCM_CT },
    { wxT("wav"), AV_CODEC_ID_ATRAC3 },
    { wxT("wav"), AV_CODEC_ID_IMC },
    { wxT("wav"), AV_CODEC_ID_AC3 },
-   { wxT("wav"), AV_CODEC_ID_DTS },
+   //{ wxT("wav"), AV_CODEC_ID_DTS },
    { wxT("wav"), AV_CODEC_ID_FLAC },
    { wxT("wav"), AV_CODEC_ID_ADPCM_SWF },
    { wxT("wav"), AV_CODEC_ID_VORBIS },
@@ -1196,36 +1317,17 @@ CompatibilityEntry ExportFFmpegOptions::CompatibilityList[] =
 };
 
 /// AAC profiles
-int ExportFFmpegOptions::iAACProfileValues[] = {
-   FF_PROFILE_AAC_LOW,
-   FF_PROFILE_AAC_MAIN,
-   /*FF_PROFILE_AAC_SSR,*/
-   FF_PROFILE_AAC_LTP
-};
-
-/// Names of AAC profiles to be displayed
-static wxString iAACProfileNames(int index)
-{
-   static const wxString names[] = {
-       XO("LC"),
-       XO("Main"),
-       /*_("SSR"),*/ //SSR is not supported
-       XO("LTP")
-   };
-
-   class NamesArray final : public TranslatableStringArray
+// The FF_PROFILE_* enumeration is defined in the ffmpeg library
+// PRL:  I cant find where this preference is used!
+ChoiceSetting AACProfiles { wxT("/FileFormats/FFmpegAACProfile"),
    {
-      void Populate() override
-      {
-         for (auto &name : names)
-            mContents.push_back( wxGetTranslation( name ) );
-      }
-   };
-
-   static NamesArray theArray;
-
-   return theArray.Get()[ index ];
-}
+      {wxT("1") /*FF_PROFILE_AAC_LOW*/, XO("LC")},
+      {wxT("0") /*FF_PROFILE_AAC_MAIN*/, XO("Main")},
+      // {wxT("2") /*FF_PROFILE_AAC_SSR*/, XO("SSR")}, //SSR is not supported
+      {wxT("3") /*FF_PROFILE_AAC_LTP*/, XO("LTP")},
+   },
+   0, // "1"
+};
 
 /// List of export types
 ExposedFormat ExportFFmpegOptions::fmts[] =
@@ -1236,11 +1338,6 @@ ExposedFormat ExportFFmpegOptions::fmts[] =
    {FMT_WMA2,  wxT("WMA"),    wxT("wma"), wxT("asf"),  2,   AV_VERSION_INT(52,53,0),  false, XO("WMA (version 2) Files (FFmpeg)"),   AV_CODEC_ID_WMAV2,  true},
    {FMT_OTHER, wxT("FFMPEG"), wxT(""),    wxT(""),     255, AV_CANMETA,             true,  XO("Custom FFmpeg Export"),             AV_CODEC_ID_NONE,   true}
 };
-
-wxString ExposedFormat::Description() const
-{
-   return wxGetTranslation(description_);
-}
 
 /// Sample rates supported by AAC encoder (must end with zero-element)
 const int ExportFFmpegOptions::iAACSampleRates[] = { 7350, 8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 64000, 88200, 0 };
@@ -1330,30 +1427,18 @@ ApplicableFor ExportFFmpegOptions::apptable[] =
    {FALSE,FFmpegExportCtrlID(0),AV_CODEC_ID_NONE,NULL}
 };
 
-/// Prediction order method - names. Labels are indices of this array.
-static wxString PredictionOrderMethodNames(int index)
-{
-   static const wxString names[] = {
-      XO("Estimate"),
-      XO("2-level"),
-      XO("4-level"),
-      XO("8-level"),
-      XO("Full search"),
-      XO("Log search")
-   };
+namespace {
 
-   class NamesArray final : public TranslatableStringArray
-   {
-      void Populate() override
-      {
-         for (auto &name : names)
-            mContents.push_back( wxGetTranslation( name ) );
-      }
-   };
+/// Prediction order method - names.
+const TranslatableStrings PredictionOrderMethodNames {
+   XO("Estimate"),
+   XO("2-level"),
+   XO("4-level"),
+   XO("8-level"),
+   XO("Full search"),
+   XO("Log search"),
+};
 
-   static NamesArray theArray;
-
-   return theArray.Get()[ index ];
 }
 
 
@@ -1379,18 +1464,6 @@ ExportFFmpegOptions::ExportFFmpegOptions(wxWindow *parent)
    {
       FetchFormatList();
       FetchCodecList();
-
-      for (unsigned int i = 0; i < 6; i++)
-      {
-         mPredictionOrderMethodLabels.push_back(i);
-         mPredictionOrderMethodNames.push_back(wxString::Format(wxT("%s"),PredictionOrderMethodNames(i)));
-      }
-
-      for (unsigned int i=0; i < (sizeof(iAACProfileValues)/sizeof(int)); i++)
-      {
-         mProfileNames.push_back(wxString::Format(wxT("%s"),iAACProfileNames(i)));
-         mProfileLabels.push_back(iAACProfileValues[i]);
-      }
 
       PopulateOrExchange(S);
 
@@ -1438,6 +1511,9 @@ void ExportFFmpegOptions::FetchCodecList()
       // We're only interested in audio and only in encoders
       if (codec->type == AVMEDIA_TYPE_AUDIO && av_codec_is_encoder(codec))
       {
+         // MP2 Codec is broken.  Don't allow it.
+         if( codec->id == AV_CODEC_ID_MP2)
+            continue;
          mCodecNames.push_back(wxString::FromUTF8(codec->name));
          mCodecLongNames.push_back(wxString::Format(wxT("%s - %s"),mCodecNames.back(),wxString::FromUTF8(codec->long_name)));
       }
@@ -1498,40 +1574,45 @@ void ExportFFmpegOptions::PopulateOrExchange(ShuttleGui & S)
             {
                S.StartMultiColumn(8, wxEXPAND);
                {
-                  mLanguageText = S.Id(FELanguageID).TieTextBox(_("Language:"), wxT("/FileFormats/FFmpegLanguage"), wxEmptyString, 9);
-                  mLanguageText->SetToolTip(_("ISO 639 3-letter language code\nOptional\nempty - automatic"));
+                  mLanguageText = S.Id(FELanguageID)
+                     .ToolTip(XO("ISO 639 3-letter language code\nOptional\nempty - automatic"))
+                     .TieTextBox(_("Language:"), {wxT("/FileFormats/FFmpegLanguage"), wxEmptyString}, 9);
 
                   S.AddSpace( 20,0 );
                   S.AddVariableText(_("Bit Reservoir"));
-                  S.Id(FEBitReservoirID).TieCheckBox( {}, wxT("/FileFormats/FFmpegBitReservoir"), true);
+                  S.Id(FEBitReservoirID).TieCheckBox( {}, {wxT("/FileFormats/FFmpegBitReservoir"), true});
 
                   S.AddSpace( 20,0 );
                   S.AddVariableText(_("VBL"));
-                  S.Id(FEVariableBlockLenID).TieCheckBox( {}, wxT("/FileFormats/FFmpegVariableBlockLen"), true);
+                  S.Id(FEVariableBlockLenID).TieCheckBox( {}, {wxT("/FileFormats/FFmpegVariableBlockLen"), true});
                }
                S.EndMultiColumn();
                S.StartMultiColumn(4, wxALIGN_LEFT);
                {
-                  mTag = S.Id(FETagID).TieTextBox(_("Tag:"), wxT("/FileFormats/FFmpegTag"), wxEmptyString, 4);
-                  mTag->SetToolTip(_("Codec tag (FOURCC)\nOptional\nempty - automatic"));
+                  mTag = S.Id(FETagID)
+                     .ToolTip(XO("Codec tag (FOURCC)\nOptional\nempty - automatic"))
+                     .TieTextBox(_("Tag:"), {wxT("/FileFormats/FFmpegTag"), wxEmptyString}, 4);
 
-                  mBitrateSpin = S.Id(FEBitrateID).TieSpinCtrl(_("Bit Rate:"), wxT("/FileFormats/FFmpegBitRate"), 0, 1000000, 0);
-                  mBitrateSpin->SetToolTip(_("Bit Rate (bits/second) - influences the resulting file size and quality\nSome codecs may only accept specific values (128k, 192k, 256k etc)\n0 - automatic\nRecommended - 192000"));
+                  mBitrateSpin = S.Id(FEBitrateID)
+                     .ToolTip(XO("Bit Rate (bits/second) - influences the resulting file size and quality\nSome codecs may only accept specific values (128k, 192k, 256k etc)\n0 - automatic\nRecommended - 192000"))
+                     .TieSpinCtrl(_("Bit Rate:"), {wxT("/FileFormats/FFmpegBitRate"), 0}, 1000000, 0);
 
-                  mQualitySpin = S.Id(FEQualityID).TieSpinCtrl(_("Quality:"), wxT("/FileFormats/FFmpegQuality"), 0, 500, -1);
-                  mQualitySpin->SetToolTip(_("Overall quality, used differently by different codecs\nRequired for vorbis\n0 - automatic\n-1 - off (use bitrate instead)"));
+                  mQualitySpin = S.Id(FEQualityID)
+                     .ToolTip(XO("Overall quality, used differently by different codecs\nRequired for vorbis\n0 - automatic\n-1 - off (use bitrate instead)"))
+                     .TieSpinCtrl(_("Quality:"), {wxT("/FileFormats/FFmpegQuality"), 0}, 500, -1);
 
-                  mSampleRateSpin = S.Id(FESampleRateID).TieSpinCtrl(_("Sample Rate:"), wxT("/FileFormats/FFmpegSampleRate"), 0, 200000, 0);
-                  mSampleRateSpin->SetToolTip(_("Sample rate (Hz)\n0 - don't change sample rate"));
+                  mSampleRateSpin = S.Id(FESampleRateID)
+                     .ToolTip(XO("Sample rate (Hz)\n0 - don't change sample rate"))
+                     .TieSpinCtrl(_("Sample Rate:"), {wxT("/FileFormats/FFmpegSampleRate"), 0}, 200000, 0);
 
-                  mCutoffSpin = S.Id(FECutoffID).TieSpinCtrl(_("Cutoff:"), wxT("/FileFormats/FFmpegCutOff"), 0, 10000000, 0);
-                  mCutoffSpin->SetToolTip(_("Audio cutoff bandwidth (Hz)\nOptional\n0 - automatic"));
+                  mCutoffSpin = S.Id(FECutoffID)
+                     .ToolTip(XO("Audio cutoff bandwidth (Hz)\nOptional\n0 - automatic"))
+                     .TieSpinCtrl(_("Cutoff:"), {wxT("/FileFormats/FFmpegCutOff"), 0}, 10000000, 0);
 
-                  mProfileChoice = S.Id(FEProfileID).TieChoice(_("Profile:"), wxT("/FileFormats/FFmpegAACProfile"),
-                     mProfileLabels[0], mProfileNames, mProfileLabels);
-                  mProfileChoice->SetSizeHints( 100,-1);
-                  mProfileChoice->SetToolTip(_("AAC Profile\nLow Complexity - default\nMost players won't play anything other than LC"));
-
+                  mProfileChoice = S.Id(FEProfileID)
+                     .ToolTip(XO("AAC Profile\nLow Complexity - default\nMost players won't play anything other than LC"))
+                     .MinSize( { 100, -1 } )
+                     .TieChoice(_("Profile:"), AACProfiles);
                }
                S.EndMultiColumn();
             }
@@ -1540,37 +1621,49 @@ void ExportFFmpegOptions::PopulateOrExchange(ShuttleGui & S)
             {
                S.StartMultiColumn(4, wxALIGN_LEFT);
                {
-                  mCompressionLevelSpin = S.Id(FECompLevelID).TieSpinCtrl(_("Compression:"), wxT("/FileFormats/FFmpegCompLevel"), 0, 10, -1);
-                  mCompressionLevelSpin->SetToolTip(_("Compression level\nRequired for FLAC\n-1 - automatic\nmin - 0 (fast encoding, large output file)\nmax - 10 (slow encoding, small output file)"));
+                  mCompressionLevelSpin = S
+                     .ToolTip(XO("Compression level\nRequired for FLAC\n-1 - automatic\nmin - 0 (fast encoding, large output file)\nmax - 10 (slow encoding, small output file)"))
+                     .Id(FECompLevelID).TieSpinCtrl(_("Compression:"), {wxT("/FileFormats/FFmpegCompLevel"), 0}, 10, -1);
 
-                  mFrameSizeSpin =  S.Id(FEFrameSizeID).TieSpinCtrl(_("Frame:"), wxT("/FileFormats/FFmpegFrameSize"), 0, 65535, 0);
-                  mFrameSizeSpin->SetToolTip(_("Frame size\nOptional\n0 - default\nmin - 16\nmax - 65535"));
+                  mFrameSizeSpin =  S.Id(FEFrameSizeID)
+                     .ToolTip(XO("Frame size\nOptional\n0 - default\nmin - 16\nmax - 65535"))
+                     .TieSpinCtrl(_("Frame:"), {wxT("/FileFormats/FFmpegFrameSize"), 0}, 65535, 0);
 
-                  mLPCCoeffsPrecisionSpin = S.Id(FELPCCoeffsID).TieSpinCtrl(_("LPC"), wxT("/FileFormats/FFmpegLPCCoefPrec"), 0, 15, 0);
-                  mLPCCoeffsPrecisionSpin->SetToolTip(_("LPC coefficients precision\nOptional\n0 - default\nmin - 1\nmax - 15"));
+                  mLPCCoeffsPrecisionSpin = S.Id(FELPCCoeffsID)
+                     .ToolTip(XO("LPC coefficients precision\nOptional\n0 - default\nmin - 1\nmax - 15"))
+                     .TieSpinCtrl(_("LPC"), {wxT("/FileFormats/FFmpegLPCCoefPrec"), 0}, 15, 0);
 
-                  mPredictionOrderMethodChoice = S.Id(FEPredOrderID).TieChoice(_("PdO Method:"), wxT("/FileFormats/FFmpegPredOrderMethod"),
-                     mPredictionOrderMethodLabels[4], mPredictionOrderMethodNames, mPredictionOrderMethodLabels);
-                  mPredictionOrderMethodChoice->SetSizeHints( 100,-1);
-                  mPredictionOrderMethodChoice->SetToolTip(_("Prediction Order Method\nEstimate - fastest, lower compression\nLog search - slowest, best compression\nFull search - default"));
+                  mPredictionOrderMethodChoice = S.Id(FEPredOrderID)
+                     .ToolTip(XO("Prediction Order Method\nEstimate - fastest, lower compression\nLog search - slowest, best compression\nFull search - default"))
+                     .MinSize( { 100, -1 } )
+                     .TieNumberAsChoice(
+                        _("PdO Method:"),
+                        {wxT("/FileFormats/FFmpegPredOrderMethod"),
+                         4}, // Full search
+                        PredictionOrderMethodNames
+                     );
 
-                  mMinPredictionOrderSpin = S.Id(FEMinPredID).TieSpinCtrl(_("Min. PdO"), wxT("/FileFormats/FFmpegMinPredOrder"), -1, 32, -1);
-                  mMinPredictionOrderSpin->SetToolTip(_("Minimal prediction order\nOptional\n-1 - default\nmin - 0\nmax - 32 (with LPC) or 4 (without LPC)"));
+                  mMinPredictionOrderSpin = S.Id(FEMinPredID)
+                     .ToolTip(XO("Minimal prediction order\nOptional\n-1 - default\nmin - 0\nmax - 32 (with LPC) or 4 (without LPC)"))
+                     .TieSpinCtrl(_("Min. PdO"), {wxT("/FileFormats/FFmpegMinPredOrder"), -1}, 32, -1);
 
-                  mMaxPredictionOrderSpin = S.Id(FEMaxPredID).TieSpinCtrl(_("Max. PdO"), wxT("/FileFormats/FFmpegMaxPredOrder"), -1, 32, -1);
-                  mMaxPredictionOrderSpin->SetToolTip(_("Maximal prediction order\nOptional\n-1 - default\nmin - 0\nmax - 32 (with LPC) or 4 (without LPC)"));
+                  mMaxPredictionOrderSpin = S.Id(FEMaxPredID)
+                     .ToolTip(XO("Maximal prediction order\nOptional\n-1 - default\nmin - 0\nmax - 32 (with LPC) or 4 (without LPC)"))
+                     .TieSpinCtrl(_("Max. PdO"), {wxT("/FileFormats/FFmpegMaxPredOrder"), -1}, 32, -1);
 
-                  mMinPartitionOrderSpin = S.Id(FEMinPartOrderID).TieSpinCtrl(_("Min. PtO"), wxT("/FileFormats/FFmpegMinPartOrder"), -1, 8, -1);
-                  mMinPartitionOrderSpin->SetToolTip(_("Minimal partition order\nOptional\n-1 - default\nmin - 0\nmax - 8"));
+                  mMinPartitionOrderSpin = S.Id(FEMinPartOrderID)
+                     .ToolTip(XO("Minimal partition order\nOptional\n-1 - default\nmin - 0\nmax - 8"))
+                     .TieSpinCtrl(_("Min. PtO"), {wxT("/FileFormats/FFmpegMinPartOrder"), -1}, 8, -1);
 
-                  mMaxPartitionOrderSpin = S.Id(FEMaxPartOrderID).TieSpinCtrl(_("Max. PtO"), wxT("/FileFormats/FFmpegMaxPartOrder"), -1, 8, -1);
-                  mMaxPartitionOrderSpin->SetToolTip(_("Maximal partition order\nOptional\n-1 - default\nmin - 0\nmax - 8"));
+                  mMaxPartitionOrderSpin = S.Id(FEMaxPartOrderID)
+                     .ToolTip(XO("Maximal partition order\nOptional\n-1 - default\nmin - 0\nmax - 8"))
+                     .TieSpinCtrl(_("Max. PtO"), {wxT("/FileFormats/FFmpegMaxPartOrder"), -1}, 8, -1);
 
                   /* i18n-hint:  Abbreviates "Linear Predictive Coding",
                      but this text needs to be kept very short */
                   S.AddVariableText(_("Use LPC"));
                   // PRL:  This preference is not used anywhere!
-                  S.Id(FEUseLPCID).TieCheckBox( {}, wxT("/FileFormats/FFmpegUseLPC"), true);
+                  S.Id(FEUseLPCID).TieCheckBox( {}, {wxT("/FileFormats/FFmpegUseLPC"), true});
                }
                S.EndMultiColumn();
             }
@@ -1582,20 +1675,22 @@ void ExportFFmpegOptions::PopulateOrExchange(ShuttleGui & S)
                   /* i18n-hint: 'mux' is short for multiplexor, a device that selects between several inputs
                     'Mux Rate' is a parameter that has some bearing on compression ratio for MPEG
                     it has a hard to predict effect on the degree of compression */
-                  mMuxRate = S.Id(FEMuxRateID).TieSpinCtrl(_("Mux Rate:"), wxT("/FileFormats/FFmpegMuxRate"), 0, 10000000, 0);
-                  mMuxRate->SetToolTip(_("Maximum bit rate of the multiplexed stream\nOptional\n0 - default"));
+                  mMuxRate = S.Id(FEMuxRateID)
+                     .ToolTip(XO("Maximum bit rate of the multiplexed stream\nOptional\n0 - default"))
+                     .TieSpinCtrl(_("Mux Rate:"), {wxT("/FileFormats/FFmpegMuxRate"), 0}, 10000000, 0);
 
                   /* i18n-hint: 'Packet Size' is a parameter that has some bearing on compression ratio for MPEG
                     compression.  It measures how big a chunk of audio is compressed in one piece. */
-                  mPacketSize = S.Id(FEPacketSizeID).TieSpinCtrl(_("Packet Size:"), wxT("/FileFormats/FFmpegPacketSize"), 0, 10000000, 0);
-                  mPacketSize->SetToolTip(_("Packet size\nOptional\n0 - default"));
+                  mPacketSize = S.Id(FEPacketSizeID)
+                     .ToolTip(XO("Packet size\nOptional\n0 - default"))
+                     .TieSpinCtrl(_("Packet Size:"), {wxT("/FileFormats/FFmpegPacketSize"), 0}, 10000000, 0);
                }
                S.EndMultiColumn();
             }
             S.EndStatic();
             //S.EndScroller();
             S.SetBorder( 5 );
-            S.AddStandardButtons();
+            S.AddStandardButtons(eOkButton | eCancelButton | eHelpButton );
          }
          S.EndVerticalLay();
       }
@@ -1700,6 +1795,9 @@ int ExportFFmpegOptions::FetchCompatibleCodecList(const wxChar *fmt, AVCodecID i
       {
          if (codec->type == AVMEDIA_TYPE_AUDIO && av_codec_is_encoder(codec))
          {
+            // MP2 is broken.
+            if( codec->id == AV_CODEC_ID_MP2)
+               continue;
             if (! make_iterator_range( mShownCodecNames )
                .contains( wxString::FromUTF8(codec->name) ) )
             {
@@ -1747,7 +1845,7 @@ int ExportFFmpegOptions::FetchCompatibleFormatList(AVCodecID id, wxString *selfm
    // Find all formats compatible to this codec in compatibility list
    for (int i = 0; CompatibilityList[i].fmt != NULL; i++)
    {
-      if (CompatibilityList[i].codec == id || CompatibilityList[i].codec == AV_CODEC_ID_NONE)
+      if (CompatibilityList[i].codec == id || (CompatibilityList[i].codec == AV_CODEC_ID_NONE) )
       {
          if ((selfmt != NULL) && (*selfmt == CompatibilityList[i].fmt)) index = mShownFormatNames.size();
          FromList.push_back(CompatibilityList[i].fmt);
@@ -1829,15 +1927,24 @@ void ExportFFmpegOptions::OnDeletePreset(wxCommandEvent& WXUNUSED(event))
 ///
 ///
 void ExportFFmpegOptions::OnSavePreset(wxCommandEvent& WXUNUSED(event))
+{  const bool kCheckForOverwrite = true;
+   SavePreset(kCheckForOverwrite);
+}
+
+// Return false if failed to save.
+bool ExportFFmpegOptions::SavePreset(bool bCheckForOverwrite)
 {
    wxComboBox *preset = dynamic_cast<wxComboBox*>(FindWindowById(FEPresetID,this));
    wxString name = preset->GetValue();
    if (name.empty())
    {
-      AudacityMessageBox(_("You can't save a preset without name"));
-      return;
+      AudacityMessageBox(_("You can't save a preset without a name"));
+      return false;
    }
-   mPresets->SavePreset(this,name);
+   if( bCheckForOverwrite && !mPresets->OverwriteIsOk(name))
+      return false;
+   if( !mPresets->SavePreset(this,name) )
+      return false;
    int index = mPresetNames.Index(name,false);
    if (index == -1)
    {
@@ -1846,6 +1953,7 @@ void ExportFFmpegOptions::OnSavePreset(wxCommandEvent& WXUNUSED(event))
       mPresetCombo->Append(mPresetNames);
       mPresetCombo->Select(mPresetNames.Index(name,false));
    }
+   return true;
 }
 
 ///
@@ -1894,6 +2002,20 @@ void ExportFFmpegOptions::OnImportPresets(wxCommandEvent& WXUNUSED(event))
 ///
 void ExportFFmpegOptions::OnExportPresets(wxCommandEvent& WXUNUSED(event))
 {
+   const bool kCheckForOverwrite = true;
+   // Bug 1180 save any pending preset before exporting the lot.
+   // If saving fails, don't try to export.
+   if( !SavePreset(!kCheckForOverwrite) )
+      return;
+
+   wxArrayString presets;
+   mPresets->GetPresetList( presets);
+   if( presets.Count() < 1)
+   {
+      AudacityMessageBox(_("No presets to export"));
+      return;
+   }
+
    wxString path;
    FileDialogWrapper dlg(this,
                   _("Select xml file to export presets into"),
@@ -1925,6 +2047,67 @@ void ExportFFmpegOptions::OnAllCodecs(wxCommandEvent& WXUNUSED(event))
    mCodecList->Clear();
    mCodecList->Append(mCodecNames);
 }
+
+/// ReportIfBadCombination will trap 
+/// bad combinations of format and codec and report
+/// using a message box.
+/// We may later extend it to catch bad parameters too.
+/// @return true iff a bad combination was reported
+/// At the moment we don't trap unrecognised format
+/// or codec.  (We do not expect them to happen ever).
+bool ExportFFmpegOptions::ReportIfBadCombination()
+{
+   wxString *selcdc = NULL;
+   wxString *selcdclong = NULL;
+   FindSelectedCodec(&selcdc, &selcdclong);
+   if (selcdc == NULL)
+      return false; // unrecognised codec. Treated as OK
+   AVCodec *cdc = avcodec_find_encoder_by_name(selcdc->ToUTF8());
+   if (cdc == NULL)
+      return false; // unrecognised codec. Treated as OK
+
+   wxString *selfmt = NULL;
+   wxString *selfmtlong = NULL;
+   FindSelectedFormat(&selfmt, &selfmtlong);
+   if( selfmt == NULL )
+      return false; // unrecognised format; Treated as OK
+   
+   // This is intended to test for illegal combinations.
+   // However, the list updating now seems to be working correctly
+   // making it impossible to select illegal combinations
+   bool bFound = false;
+   for (int i = 0; CompatibilityList[i].fmt != NULL; i++)
+   {
+      if (*selfmt == CompatibilityList[i].fmt) 
+      {
+         if (CompatibilityList[i].codec == cdc->id || (CompatibilityList[i].codec == AV_CODEC_ID_NONE) ){
+            bFound = true;
+            break;
+         }
+      }
+   }
+
+   // We can put extra code in here, to disallow combinations
+   // We could also test for illegal parameters, and deliver
+   // custom error messages in that case.
+   // The below would make AAC codec disallowed.
+   //if( cdc->id == AV_CODEC_ID_AAC)
+   //   bFound = false;
+
+   // Valid combination was found, so no reporting.
+   if( bFound )
+      return false;
+
+   AudacityMessageBox( 
+      wxString::Format(_("Format %s is not compatible with codec %s."),
+         *selfmt,
+         *selcdc ),
+      _("Incompatible format and codec"));
+
+   return true;
+}
+
+
 
 void ExportFFmpegOptions::EnableDisableControls(AVCodec *cdc, wxString *selfmt)
 {
@@ -2050,10 +2233,14 @@ void ExportFFmpegOptions::OnCodecList(wxCommandEvent& WXUNUSED(event))
    DoOnCodecList();
 }
 
+
 ///
 ///
 void ExportFFmpegOptions::OnOK(wxCommandEvent& WXUNUSED(event))
 {
+   if( ReportIfBadCombination() )
+      return;
+
    int selcdc = mCodecList->GetSelection();
    int selfmt = mFormatList->GetSelection();
    if (selcdc > -1) gPrefs->Write(wxT("/FileFormats/FFmpegCodec"),mCodecList->GetString(selcdc));
@@ -2069,5 +2256,11 @@ void ExportFFmpegOptions::OnOK(wxCommandEvent& WXUNUSED(event))
 
    return;
 }
+
+void ExportFFmpegOptions::OnGetURL(wxCommandEvent & WXUNUSED(event))
+{
+   HelpSystem::ShowHelp(this, wxT("Custom_FFmpeg_Export_Options"));
+}
+
 
 #endif

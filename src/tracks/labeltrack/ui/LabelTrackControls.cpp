@@ -125,26 +125,30 @@ void LabelTrackMenuTable::OnSetFont(wxCommandEvent &)
 
          /* i18n-hint: (noun) The name of the typeface*/
          S.AddPrompt(_("Face name"));
-         lb = safenew wxListBox(&dlg, wxID_ANY,
+         lb = safenew wxListBox(S.GetParent(), wxID_ANY,
             wxDefaultPosition,
             wxDefaultSize,
             facenames,
             wxLB_SINGLE);
 
-         lb->SetName(_("Face name"));
          lb->SetSelection( make_iterator_range( facenames ).index( facename ));
-         S.AddWindow(lb, wxALIGN_LEFT | wxEXPAND | wxALL);
+         S
+            .Name(XO("Face name"))
+            .Position(  wxALIGN_LEFT | wxEXPAND | wxALL )
+            .AddWindow(lb);
 
          /* i18n-hint: (noun) The size of the typeface*/
          S.AddPrompt(_("Face size"));
-         sc = safenew wxSpinCtrl(&dlg, wxID_ANY,
+         sc = safenew wxSpinCtrl(S.GetParent(), wxID_ANY,
             wxString::Format(wxT("%ld"), fontsize),
             wxDefaultPosition,
             wxDefaultSize,
             wxSP_ARROW_KEYS,
             8, 48, fontsize);
-         sc->SetName(_("Face size"));
-         S.AddWindow(sc, wxALIGN_LEFT | wxALL);
+         S
+            .Name(XO("Face size"))
+            .Position( wxALIGN_LEFT | wxALL )
+            .AddWindow(sc);
       }
       S.EndMultiColumn();
       S.AddStandardButtons();
@@ -178,3 +182,15 @@ template<> template<> auto DoGetLabelTrackControls::Implementation() -> Function
    };
 }
 static DoGetLabelTrackControls registerDoGetLabelTrackControls;
+
+using GetDefaultLabelTrackHeight = GetDefaultTrackHeight::Override< LabelTrack >;
+template<> template<>
+auto GetDefaultLabelTrackHeight::Implementation() -> Function {
+   return [](LabelTrack &) {
+      // Label tracks are narrow
+      // Default is to allow two rows so that NEW users get the
+      // idea that labels can 'stack' when they would overlap.
+      return 73;
+   };
+}
+static GetDefaultLabelTrackHeight registerGetDefaultLabelTrackHeight;

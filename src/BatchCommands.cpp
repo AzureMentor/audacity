@@ -38,10 +38,7 @@ processing.  See also MacrosWindow and ApplyMacroDialog.
 #include "SelectUtilities.h"
 #include "Shuttle.h"
 #include "Track.h"
-#include "export/ExportFLAC.h"
 #include "export/ExportMP3.h"
-#include "export/ExportOGG.h"
-#include "export/ExportPCM.h"
 
 #include "AllThemeResources.h"
 
@@ -59,7 +56,7 @@ enum eCommandType { CtEffect, CtMenu, CtSpecial };
 // TIDY-ME: Not currently translated,
 // but there are issues to address if we do.
 // CLEANSPEECH remnant
-static const std::pair<const wxChar*, CommandID> SpecialCommands[] = {
+static const std::pair<TranslatableString, CommandID> SpecialCommands[] = {
    // Use translations of the first members, some other day.
    // For 2.2.2 we'll get them into the catalog at least.
 
@@ -106,16 +103,16 @@ MacroCommands::MacroCommands()
    }
 }
 
-static const wxString MP3Conversion = XO("MP3 Conversion");
-static const wxString FadeEnds      = XO("Fade Ends");
-static const wxString SelectToEnds  = XO("Select to Ends");
+static const auto MP3Conversion = XO("MP3 Conversion");
+static const auto FadeEnds      = XO("Fade Ends");
+static const auto SelectToEnds  = XO("Select to Ends");
 
 
 wxArrayStringEx MacroCommands::GetNamesOfDefaultMacros()
 {
    return {
-      GetCustomTranslation( MP3Conversion ) ,
-      GetCustomTranslation( FadeEnds ) ,
+      MP3Conversion.Translation() ,
+      FadeEnds.Translation() ,
       //Don't add this one anymore, as there is a new menu command for it.
       //GetCustomTranslation( SelectToEnds ) ,
    };
@@ -126,16 +123,16 @@ void MacroCommands::RestoreMacro(const wxString & name)
 // TIDY-ME: Effects change their name with localisation.
 // Commands (at least currently) don't.  Messy.
    ResetMacro();
-   if (name == GetCustomTranslation( MP3Conversion ) ){
+   if (name == MP3Conversion.Translation() ){
         AddToMacro( wxT("Normalize") );
         AddToMacro( wxT("ExportMP3") );
-   } else if (name == GetCustomTranslation( FadeEnds ) ){
+   } else if (name == FadeEnds.Translation() ){
         AddToMacro( wxT("Select"), wxT("Start=\"0\" End=\"1\"") );
         AddToMacro( wxT("FadeIn") );
         AddToMacro( wxT("Select"), wxT("Start=\"0\" End=\"1\" RelativeTo=\"ProjectEnd\"") );
         AddToMacro( wxT("FadeOut") );
         AddToMacro( wxT("Select"), wxT("Start=\"0\" End=\"0\"") );
-   } else if (name == GetCustomTranslation( SelectToEnds ) ){
+   } else if (name == SelectToEnds.Translation() ){
         AddToMacro( wxT("SelCursorEnd") );
         AddToMacro( wxT("SelStartCursor") );
    } 
@@ -297,7 +294,7 @@ MacroCommandsCatalog::MacroCommandsCatalog( const AudacityProject *project )
    Entries commands;
    for( const auto &command : SpecialCommands )
       commands.push_back( {
-         { command.second, GetCustomTranslation( command.first ) },
+         { command.second, command.first.Translation() },
          _("Special Command")
       } );
 
@@ -323,17 +320,17 @@ MacroCommandsCatalog::MacroCommandsCatalog( const AudacityProject *project )
    auto &manager = CommandManager::Get( *project );
    wxArrayString mLabels;
    CommandIDs mNames;
-   std::vector<bool> vHasDialog;
+   std::vector<bool> vExcludeFromMacros;
    mLabels.clear();
    mNames.clear();
-   manager.GetAllCommandLabels(mLabels, vHasDialog, true);
+   manager.GetAllCommandLabels(mLabels, vExcludeFromMacros, true);
    manager.GetAllCommandNames(mNames, true);
 
    const bool english = wxGetLocale()->GetCanonicalName().StartsWith(wxT("en"));
 
    for(size_t i=0; i<mNames.size(); i++) {
-      wxString label = mLabels[i];
-      if( !vHasDialog[i] ){
+      if( !vExcludeFromMacros[i] ){
+         wxString label = mLabels[i];
          label.Replace( "&", "" );
          bool suffix;
          if (!english)
@@ -579,12 +576,12 @@ bool MacroCommands::WriteMp3File( const wxString & Name, int bitrate )
    bool rc;
    long prevBitRate = gPrefs->Read(wxT("/FileFormats/MP3Bitrate"), 128);
    gPrefs->Write(wxT("/FileFormats/MP3Bitrate"), bitrate);
-   int prevMode = gPrefs->Read(wxT("/FileFormats/MP3RateMode"), MODE_CBR);
-   gPrefs->Write(wxT("/FileFormats/MP3RateMode"), MODE_CBR);
+   auto prevMode = MP3RateModeSetting.ReadEnum();
+   MP3RateModeSetting.WriteEnum(MODE_CBR);
 
    auto cleanup = finally( [&] {
       gPrefs->Write(wxT("/FileFormats/MP3Bitrate"), prevBitRate);
-      gPrefs->Write(wxT("/FileFormats/MP3RateMode"), prevMode);
+      MP3RateModeSetting.WriteEnum(prevMode);
       gPrefs->Flush();
    } );
 
@@ -719,7 +716,7 @@ bool MacroCommands::DoAudacityCommand(
 
    if (flags & EffectManager::kConfigured)
    {
-      TransportActions::DoStop(project);
+      ProjectAudioManager::Get( project ).Stop();
 //    SelectAllIfNone();
    }
 

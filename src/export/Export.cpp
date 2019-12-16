@@ -47,14 +47,6 @@
 #include <wx/dcmemory.h>
 #include <wx/window.h>
 
-#include "ExportPCM.h"
-#include "ExportMP3.h"
-#include "ExportOGG.h"
-#include "ExportFLAC.h"
-#include "ExportCL.h"
-#include "ExportMP2.h"
-#include "ExportFFmpeg.h"
-
 #include "sndfile.h"
 
 #include "FileDialog.h"
@@ -63,6 +55,7 @@
 #include "../FileFormats.h"
 #include "../Mix.h"
 #include "../Prefs.h"
+#include "../prefs/ImportExportPrefs.h"
 #include "../Project.h"
 #include "../ProjectHistory.h"
 #include "../ProjectSettings.h"
@@ -125,7 +118,7 @@ void ExportPlugin::SetFormat(const wxString & format, int index)
    mFormatInfos[index].mFormat = format;
 }
 
-void ExportPlugin::SetDescription(const wxString & description, int index)
+void ExportPlugin::SetDescription(const TranslatableString & description, int index)
 {
    mFormatInfos[index].mDescription = description;
 }
@@ -160,9 +153,14 @@ wxString ExportPlugin::GetFormat(int index)
    return mFormatInfos[index].mFormat;
 }
 
-wxString ExportPlugin::GetDescription(int index)
+TranslatableString ExportPlugin::GetUntranslatedDescription(int index)
 {
    return mFormatInfos[index].mDescription;
+}
+
+wxString ExportPlugin::GetTranslatedDescription(int index)
+{
+   return GetUntranslatedDescription( index ).Translation();
 }
 
 FileExtension ExportPlugin::GetExtension(int index)
@@ -181,7 +179,7 @@ wxString ExportPlugin::GetMask(int index)
       return mFormatInfos[index].mMask;
    }
 
-   wxString mask = GetDescription(index) + wxT("|");
+   wxString mask = GetTranslatedDescription(index) + wxT("|");
 
    // Build the mask
    // const auto &ext = GetExtension(index);
@@ -250,9 +248,12 @@ std::unique_ptr<Mixer> ExportPlugin::CreateMixer(const TrackList &tracks,
          bool highQuality, MixerSpec *mixerSpec)
 {
    WaveTrackConstArray inputTracks;
+
+   bool anySolo = !(( tracks.Any<const WaveTrack>() + &WaveTrack::GetSolo ).empty());
+
    auto range = tracks.Any< const WaveTrack >()
       + (selectionOnly ? &Track::IsSelected : &Track::Any )
-      - &WaveTrack::GetMute;
+      - ( anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute);
    for (auto pTrack: range)
       inputTracks.push_back(
          pTrack->SharedPointer< const WaveTrack >() );
@@ -270,7 +271,7 @@ std::unique_ptr<Mixer> ExportPlugin::CreateMixer(const TrackList &tracks,
 }
 
 void ExportPlugin::InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
-   const wxString &title, const wxString &message)
+   const TranslatableString &title, const TranslatableString &message)
 {
    if (!pDialog)
       pDialog = std::make_unique<ProgressDialog>( title, message );
@@ -279,6 +280,13 @@ void ExportPlugin::InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
       pDialog->SetMessage( message );
       pDialog->Reinit();
    }
+}
+
+void ExportPlugin::InitProgress(std::unique_ptr<ProgressDialog> &pDialog,
+   const wxFileNameWrapper &title, const TranslatableString &message)
+{
+   return InitProgress(
+      pDialog, TranslatableString{ title.GetName() }, message );
 }
 
 //----------------------------------------------------------------------------
@@ -294,34 +302,42 @@ BEGIN_EVENT_TABLE(Exporter, wxEvtHandler)
    EVT_COMMAND( wxID_ANY, AUDACITY_FILE_SUFFIX_EVENT, Exporter::OnExtensionChanged)
 END_EVENT_TABLE()
 
+namespace {
+   using ExportPluginFactories = std::vector< Exporter::ExportPluginFactory >;
+   ExportPluginFactories &sFactories()
+   {
+      static ExportPluginFactories theList;
+      return theList;
+   }
+}
+
+Exporter::RegisteredExportPlugin::RegisteredExportPlugin(
+   const ExportPluginFactory &factory )
+{
+   if ( factory )
+      sFactories().emplace_back( factory );
+}
+
 Exporter::Exporter()
 {
    mMixerSpec = NULL;
    mBook = NULL;
 
+   // build the list of export plugins.
+   for ( const auto &factory : sFactories() )
+      mPlugins.emplace_back( factory() );
+
+   // The factories were pushed on the array at static initialization time in an
+   // unspecified sequence.  Sort according to the sequence numbers the plugins
+   // report to make the order determinate.
+   std::sort( mPlugins.begin(), mPlugins.end(),
+      []( const ExportPluginArray::value_type &a,
+          const ExportPluginArray::value_type &b ){
+         return a->SequenceNumber() < b->SequenceNumber();
+      }
+   );
+
    SetFileDialogTitle( _("Export Audio") );
-
-   RegisterPlugin(New_ExportPCM());
-   RegisterPlugin(New_ExportMP3());
-
-#ifdef USE_LIBVORBIS
-   RegisterPlugin(New_ExportOGG());
-#endif
-
-#ifdef USE_LIBFLAC
-   RegisterPlugin(New_ExportFLAC());
-#endif
-
-#if USE_LIBTWOLAME
-   RegisterPlugin(New_ExportMP2());
-#endif
-
-   // Command line export not available on Windows and Mac platforms
-   RegisterPlugin(New_ExportCL());
-
-#if defined(USE_FFMPEG)
-   RegisterPlugin(New_ExportFFmpeg());
-#endif
 }
 
 Exporter::~Exporter()
@@ -369,11 +385,6 @@ int Exporter::FindFormatIndex(int exportindex)
       }
    }
    return 0;
-}
-
-void Exporter::RegisterPlugin(std::unique_ptr<ExportPlugin> &&ExportPlugin)
-{
-   mPlugins.push_back(std::move(ExportPlugin));
 }
 
 const ExportPluginArray &Exporter::GetPlugins()
@@ -504,10 +515,12 @@ bool Exporter::ExamineTracks()
 
    auto &tracks = TrackList::Get( *mProject );
 
+   bool anySolo = !(( tracks.Any<const WaveTrack>() + &WaveTrack::GetSolo ).empty());
+
    for (auto tr :
          tracks.Any< const WaveTrack >()
             + ( mSelectedOnly ? &Track::IsSelected : &Track::Any )
-            - &WaveTrack::GetMute
+            - ( anySolo ? &WaveTrack::GetNotSolo : &WaveTrack::GetMute)
    ) {
       mNumSelected++;
 
@@ -555,9 +568,23 @@ bool Exporter::ExamineTracks()
       return false;
    }
 
-   if (mT0 < earliestBegin)
-      mT0 = earliestBegin;
+   // The skipping of silent space could be cleverer and take 
+   // into account clips.
+   // As implemented now, it can only skip initial silent space that 
+   // has no clip before it, and terminal silent space that has no clip 
+   // after it.
+   if (mT0 < earliestBegin){
+      // Bug 1904 
+      // Previously we always skipped initial silent space.
+      // Now skipping it is an opt-in option.
+      bool skipSilenceAtBeginning;
+      gPrefs->Read(wxT("/AudioFiles/SkipSilenceAtBeginning"),
+                                      &skipSilenceAtBeginning, false);
+      if (skipSilenceAtBeginning)
+         mT0 = earliestBegin;
+   }
 
+   // We still skip silent space at the end
    if (mT1 > latestEnd)
       mT1 = latestEnd;
 
@@ -833,7 +860,7 @@ bool Exporter::CheckMix()
    // Detemine if exported file will be stereo or mono or multichannel,
    // and if mixing will occur.
 
-   int downMix = gPrefs->Read(wxT("/FileFormats/ExportDownMix"), true);
+   auto downMix = ImportExportPrefs::ExportDownMixSetting.ReadEnum();
    int exportedChannels = mPlugins[mFormat]->SetNumExportChannels();
 
    if (downMix) {
@@ -966,7 +993,8 @@ void Exporter::CreateUserPane(wxWindow *parent)
          S.StartStatic(_("Format Options"), 1);
          {
             mBook = safenew wxSimplebook(S.GetParent());
-            S.AddWindow(mBook, wxEXPAND);
+            S.Position(wxEXPAND)
+               .AddWindow(mBook);
 
             for (const auto &pPlugin : mPlugins)
             {
@@ -1347,10 +1375,12 @@ ExportMixerDialog::ExportMixerDialog( const TrackList *tracks, bool selectedOnly
 
    unsigned numTracks = 0;
 
+   bool anySolo = !(( tracks->Any<const WaveTrack>() + &WaveTrack::GetSolo ).empty());
+
    for (auto t :
          tracks->Any< const WaveTrack >()
-            + ( selectedOnly ? &Track::IsSelected : &Track::Any )
-            - &WaveTrack::GetMute
+            + ( selectedOnly ? &Track::IsSelected : &Track::Any  )
+            - ( anySolo ? &WaveTrack::GetNotSolo :  &WaveTrack::GetMute)
    ) {
       numTracks++;
       const wxString sTrackName = (t->GetName()).Left(20);

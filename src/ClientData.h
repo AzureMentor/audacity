@@ -32,6 +32,9 @@ struct AUDACITY_DLL_API Base
 // (unique_ptr has two, the second is defaulted)
 template< typename Object > using UniquePtr = std::unique_ptr< Object >;
 
+// Risk of dangling pointers, so be careful
+template< typename Object > using BarePtr = Object*;
+
 // A convenient base class defining abstract virtual Clone() for a given kind
 // of pointer
 template<
@@ -217,6 +220,8 @@ public:
    Site& operator =( Site && other )
       { mData = std::move(other.mData); return *this; }
 
+   size_t size() const { return mData.size(); }
+
    /// \brief a type meant to be stored by client code in a static variable,
    /// and used as a retrieval key to get the manufactured client object back
    /// from the host object.
@@ -339,6 +344,40 @@ protected:
       }
    }
 
+   // \brief Invoke predicate on the ClientData objects that have been created in
+   // this, but do not cause the creation of any.  Stop at the first for which
+   // the predicate returns true, and return a pointer to the corresponding
+   // object, or return nullptr if no return values were true.
+   // Beware that the sequence of visitation is not specified.
+   template< typename Function >
+   ClientData *FindIf( const Function &function )
+   {
+      auto data = GetData();
+      for( auto &pObject : data.mObject ) {
+         const auto &ptr = Dereferenceable(pObject);
+         if ( ptr && function ( *ptr ) )
+            return &*ptr;
+      }
+      return nullptr;
+   }
+
+   // const counterpart of previous, only compiles with a function that takes
+   // a value or const reference argument
+   template< typename Function >
+   const ClientData *FindIf( const Function &function ) const
+   {
+      auto data = GetData();
+      for( auto &pObject : data.mObject ) {
+         const auto &ptr = Dereferenceable(pObject);
+         if ( ptr ) {
+            const auto &c_ref = *ptr;
+            if ( function( c_ref ) );
+               return &*c_ref;
+         }
+      }
+      return nullptr;
+   }
+
    // \brief For each registered factory, if the corresponding object in this
    // is absent, then invoke the factory and store the result.
    void BuildAll()
@@ -416,7 +455,12 @@ private:
    {
       return Locked< DataContainer >{ mData };
    }
-
+   
+   Locked<const DataContainer> GetData() const
+   {
+      return Locked< const DataContainer >{ mData };
+   }
+   
    static void EnsureIndex( Locked<DataContainer> &data, size_t index )
    {
       if (data.mObject.size() <= index)
